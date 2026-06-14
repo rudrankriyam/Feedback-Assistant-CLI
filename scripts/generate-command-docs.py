@@ -12,7 +12,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_PATH = REPO_ROOT / "docs" / "COMMANDS.md"
 
 
-HELP_TOPICS = ["payload", "prepare", "submit", "fill", "store"]
+HELP_TOPICS = ["payload", "prepare", "submit", "fill", "store", "web"]
 
 
 def run_relato_help(*args: str) -> str:
@@ -62,6 +62,7 @@ def render(commands: list[str], global_help: str, topic_help: dict[str, str]) ->
         "6. Inspect Feedback Assistant for native-only fields, popups, diagnostics, and staged attachments.",
         "7. Use `--confirm` only after explicit user confirmation.",
         "8. Use `relato store list` and `relato store uploads` as local evidence afterward; they are not Apple server receipts.",
+        "9. Use `relato web` only for the isolated experimental read-only web workflow.",
         "",
         "## Payload Contract",
         "",
@@ -116,6 +117,8 @@ def render(commands: list[str], global_help: str, topic_help: dict[str, str]) ->
             "- Use `relato store summary` and `relato store list` for local verification after native submission.",
             "- Treat local store verification as local evidence, not an Apple server receipt.",
             "- `--select-popups` briefly activates Feedback Assistant to select native platform, area, and type menus.",
+            "- Use `relato web auth status` before experimental read-only web requests.",
+            "- Treat `relato web` response schemas as unstable and preserve raw JSON when debugging.",
             "",
         ]
     )

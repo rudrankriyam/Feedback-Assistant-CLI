@@ -1,10 +1,14 @@
+import Darwin
 import Foundation
 import RelatoKit
 
 enum RelatoCLI {
     static let version = "0.2.0"
+    static let webAppleIDEnvironment = "RELATO_WEB_APPLE_ID"
+    static let webPasswordEnvironment = "RELATO_WEB_PASSWORD"
+    static let webTwoFactorCommandEnvironment = "RELATO_WEB_2FA_CODE_COMMAND"
 
-    static func run(_ rawArguments: [String]) throws {
+    static func run(_ rawArguments: [String]) async throws {
         var arguments = rawArguments
         if arguments == ["--version"] || arguments == ["-v"] {
             print(version)
@@ -26,7 +30,11 @@ enum RelatoCLI {
             return
         }
         if arguments.contains("--help") || arguments.contains("-h") {
-            printHelp(topic: command)
+            if command == "web" {
+                printWebHelp()
+            } else {
+                printHelp(topic: command)
+            }
             return
         }
 
@@ -51,8 +59,428 @@ enum RelatoCLI {
             try runFill(arguments)
         case "submit":
             try runSubmit(arguments)
+        case "web":
+            try await runWeb(arguments)
         default:
             throw RelatoError.invalidArgument("Unknown command: \(command)")
+        }
+    }
+
+    static func runWeb(_ rawArguments: [String]) async throws {
+        var arguments = rawArguments
+        guard !arguments.isEmpty else {
+            printWebHelp()
+            return
+        }
+
+        let subcommand = arguments.removeFirst()
+        switch subcommand {
+        case "auth":
+            try await runWebAuth(arguments)
+        case "inbox":
+            try await runWebInbox(arguments)
+        case "feedback":
+            try await runWebFeedback(arguments)
+        case "forms":
+            try await runWebForms(arguments)
+        case "drafts":
+            try await runWebDrafts(arguments)
+        default:
+            throw RelatoError.invalidArgument("Unknown web subcommand: \(subcommand)")
+        }
+    }
+
+    static func runWebAuth(_ rawArguments: [String]) async throws {
+        var arguments = rawArguments
+        guard !arguments.isEmpty else {
+            throw RelatoError.invalidArgument("web auth requires a subcommand: login, status, logout")
+        }
+
+        let subcommand = arguments.removeFirst()
+        let store = FeedbackWebSessionStore()
+        switch subcommand {
+        case "login":
+            let appleID = (
+                try takeOption("--apple-id", from: &arguments)
+                    ?? ProcessInfo.processInfo.environment[webAppleIDEnvironment]
+                    ?? ""
+            ).trimmingCharacters(in: .whitespacesAndNewlines)
+            let twoFactorCodeCommand = (
+                try takeOption("--two-factor-code-command", from: &arguments)
+                    ?? ProcessInfo.processInfo.environment[
+                        webTwoFactorCommandEnvironment
+                    ]
+                    ?? ""
+            ).trimmingCharacters(in: .whitespacesAndNewlines)
+            try ensureNoArguments(arguments)
+
+            guard !appleID.isEmpty else {
+                throw RelatoError.invalidArgument(
+                    "--apple-id is required when \(webAppleIDEnvironment) is not set"
+                )
+            }
+            let password = try resolveWebPassword()
+            let existingSession = try store.load() ?? FeedbackWebSession(cookies: [])
+            let authenticator = FeedbackWebAuthenticator(session: existingSession)
+            let session = try await authenticator.login(
+                appleID: appleID,
+                password: password
+            ) { challenge in
+                try resolveWebTwoFactorCode(
+                    challenge: challenge,
+                    command: twoFactorCodeCommand
+                )
+            }
+            try store.save(session)
+
+            try printJSONObject([
+                "authenticated": true,
+                "source": "srp",
+                "storage": store.source,
+            ])
+        case "status":
+            try ensureNoArguments(arguments)
+            guard let session = try store.load(), !session.isEmpty else {
+                try printJSONObject([
+                    "authenticated": false,
+                    "storage": store.source,
+                ])
+                return
+            }
+
+            do {
+                let client = FeedbackWebClient(session: session, sessionStore: store)
+                let response = try await client.authenticate()
+                _ = try decodeJSONObject(response)
+                try printJSONObject([
+                    "authenticated": true,
+                    "source": "srp",
+                    "storage": store.source,
+                ])
+            } catch FeedbackWebClientError.authenticationRequired {
+                try printJSONObject([
+                    "authenticated": false,
+                    "storage": store.source,
+                ])
+            }
+        case "logout":
+            try ensureNoArguments(arguments)
+            try store.delete()
+            try printJSONObject([
+                "authenticated": false,
+                "removed": true,
+                "storage": store.source,
+            ])
+        default:
+            throw RelatoError.invalidArgument("Unknown web auth subcommand: \(subcommand)")
+        }
+    }
+
+    static func runWebInbox(_ rawArguments: [String]) async throws {
+        var arguments = rawArguments
+        guard !arguments.isEmpty else {
+            throw RelatoError.invalidArgument("web inbox requires the list subcommand")
+        }
+        let subcommand = arguments.removeFirst()
+        guard subcommand == "list" else {
+            throw RelatoError.invalidArgument("Unknown web inbox subcommand: \(subcommand)")
+        }
+
+        let locale = try takeOption("--locale", from: &arguments) ?? "en"
+        let teamID = try takeOption("--team-id", from: &arguments)
+        let compact = takeFlag("--compact", from: &arguments)
+        try ensureNoArguments(arguments)
+
+        let client = try makeFeedbackWebClient()
+        let data = try await client.contentItems(locale: locale, teamID: teamID)
+        try printJSONData(data, pretty: !compact)
+    }
+
+    static func runWebFeedback(_ rawArguments: [String]) async throws {
+        var arguments = rawArguments
+        guard !arguments.isEmpty else {
+            throw RelatoError.invalidArgument(
+                "web feedback requires a subcommand: view, status"
+            )
+        }
+        let subcommand = arguments.removeFirst()
+
+        let id = try requireOption("--id", from: &arguments)
+        let locale = try takeOption("--locale", from: &arguments) ?? "en"
+        let compact = takeFlag("--compact", from: &arguments)
+        try ensureNoArguments(arguments)
+
+        let client = try makeFeedbackWebClient()
+        let data: Data
+        switch subcommand {
+        case "view":
+            data = try await client.feedback(id: id, locale: locale)
+        case "status":
+            data = try await client.feedbackStatus(id: id, locale: locale)
+        default:
+            throw RelatoError.invalidArgument(
+                "Unknown web feedback subcommand: \(subcommand)"
+            )
+        }
+        try printJSONData(data, pretty: !compact)
+    }
+
+    static func runWebForms(_ rawArguments: [String]) async throws {
+        var arguments = rawArguments
+        guard !arguments.isEmpty else {
+            throw RelatoError.invalidArgument("web forms requires a subcommand: list, view, options")
+        }
+
+        let subcommand = arguments.removeFirst()
+        let locale = try takeOption("--locale", from: &arguments) ?? "en"
+        let teamID = try takeOption("--team-id", from: &arguments)
+        let compact = takeFlag("--compact", from: &arguments)
+
+        let data: Data
+        switch subcommand {
+        case "list":
+            try ensureNoArguments(arguments)
+            let client = try makeFeedbackWebClient()
+            data = try await client.formItems(locale: locale, teamID: teamID)
+        case "view":
+            let id = try requireOption("--id", from: &arguments)
+            try ensureNoArguments(arguments)
+            let client = try makeFeedbackWebClient()
+            data = try await client.form(id: id, locale: locale, teamID: teamID)
+        case "options":
+            let id = try requireOption("--id", from: &arguments)
+            let tat = try takeOption("--tat", from: &arguments)
+            try ensureNoArguments(arguments)
+            let client = try makeFeedbackWebClient()
+            data = try await client.form(id: id, locale: locale, teamID: teamID)
+            let form = try decodeWebJSON(
+                FeedbackWebFormSchema.self,
+                from: data,
+                name: "form schema"
+            )
+            try printJSON(form.options(tat: tat), pretty: !compact)
+            return
+        default:
+            throw RelatoError.invalidArgument("Unknown web forms subcommand: \(subcommand)")
+        }
+        try printJSONData(data, pretty: !compact)
+    }
+
+    static func runWebDrafts(_ rawArguments: [String]) async throws {
+        var arguments = rawArguments
+        guard !arguments.isEmpty else {
+            throw RelatoError.invalidArgument(
+                "web drafts requires a subcommand: create, view, update, attach, validate, submit"
+            )
+        }
+
+        let subcommand = arguments.removeFirst()
+        let locale = try takeOption("--locale", from: &arguments) ?? "en"
+        let compact = takeFlag("--compact", from: &arguments)
+
+        let data: Data
+        switch subcommand {
+        case "create":
+            let formID = try requireOption("--form-id", from: &arguments)
+            let teamID = try takeOption("--team-id", from: &arguments)
+            try ensureNoArguments(arguments)
+            let client = try makeFeedbackWebClient()
+            data = try await client.createDraft(
+                formID: formID,
+                locale: locale,
+                teamID: teamID
+            )
+        case "view":
+            let id = try requireOption("--id", from: &arguments)
+            try ensureNoArguments(arguments)
+            let client = try makeFeedbackWebClient()
+            data = try await client.draft(id: id, locale: locale)
+        case "update":
+            let id = try requireOption("--id", from: &arguments)
+            let updates = try webDraftUpdates(from: &arguments)
+            try ensureNoArguments(arguments)
+
+            let client = try makeFeedbackWebClient()
+            let draftData = try await client.draft(id: id, locale: locale)
+            let draft = try decodeWebJSON(
+                FeedbackWebDraft.self,
+                from: draftData,
+                name: "draft"
+            )
+            let formData = try await client.form(
+                id: String(draft.formID),
+                locale: locale,
+                teamID: draft.teamID
+            )
+            let form = try decodeWebJSON(
+                FeedbackWebFormSchema.self,
+                from: formData,
+                name: "form schema"
+            )
+            let answers = try FeedbackWebDraftEditor.mergedAnswers(
+                draft: draft,
+                form: form,
+                updates: updates
+            )
+            data = try await client.updateDraftAnswers(
+                id: id,
+                locale: locale,
+                answers: answers
+            )
+        case "attach":
+            let id = try requireOption("--id", from: &arguments)
+            var paths = try takeOptions("--file", from: &arguments)
+            if let payloadPath = try takeOption("--payload", from: &arguments) {
+                let payload = try loadPayload(at: expandedPath(payloadPath))
+                guard let snapshot = payload.snapshot else {
+                    throw RelatoError.invalidArgument(
+                        "The payload does not contain a snapshot attachment"
+                    )
+                }
+                paths.append(snapshot)
+            }
+            try ensureNoArguments(arguments)
+            guard !paths.isEmpty else {
+                throw RelatoError.invalidArgument(
+                    "web drafts attach requires --file PATH or --payload PATH"
+                )
+            }
+
+            let client = try makeFeedbackWebClient()
+            var seenPaths: Set<String> = []
+            var receipts: [FeedbackWebAttachmentReceipt] = []
+            for path in paths {
+                let fileURL = URL(
+                    fileURLWithPath: expandedPath(path)
+                ).standardizedFileURL
+                guard seenPaths.insert(fileURL.path).inserted else {
+                    continue
+                }
+                receipts.append(
+                    try await client.uploadAttachment(
+                        draftID: id,
+                        fileURL: fileURL,
+                        locale: locale
+                    )
+                )
+            }
+            try printJSON(receipts, pretty: !compact)
+            return
+        case "validate":
+            let id = try requireOption("--id", from: &arguments)
+            try ensureNoArguments(arguments)
+            let client = try makeFeedbackWebClient()
+            let preflight = try await client.submissionPreflight(
+                id: id,
+                locale: locale
+            )
+            try printJSON(preflight, pretty: !compact)
+            return
+        case "submit":
+            let id = try requireOption("--id", from: &arguments)
+            let confirmed = takeFlag("--confirm", from: &arguments)
+            try ensureNoArguments(arguments)
+            guard confirmed else {
+                throw RelatoError.invalidArgument(
+                    "web drafts submit requires --confirm; inspect `relato web drafts view --id \(id)` and `relato web drafts validate --id \(id)` first"
+                )
+            }
+            let client = try makeFeedbackWebClient()
+            let receipt = try await client.submitDraft(id: id, locale: locale)
+            try printJSON(receipt, pretty: !compact)
+            return
+        default:
+            throw RelatoError.invalidArgument("Unknown web drafts subcommand: \(subcommand)")
+        }
+        try printJSONData(data, pretty: !compact)
+    }
+
+    static func makeFeedbackWebClient() throws -> FeedbackWebClient {
+        let store = FeedbackWebSessionStore()
+        guard let session = try store.load(), !session.isEmpty else {
+            throw FeedbackWebClientError.authenticationRequired
+        }
+        return FeedbackWebClient(session: session, sessionStore: store)
+    }
+
+    static func webDraftUpdates(from arguments: inout [String]) throws -> [String: [String]] {
+        var updates: [String: [String]] = [:]
+
+        func set(_ tat: String, _ value: String?) {
+            guard let value else { return }
+            updates[tat] = [value]
+        }
+
+        if let payloadPath = try takeOption("--payload", from: &arguments) {
+            let payload = try loadPayload(at: expandedPath(payloadPath))
+            set(":title", payload.title)
+            set(":description", payload.description)
+            set(":platform", payload.platform)
+            set(":area", payload.category.area)
+            set(":type_req", try webFeedbackType(payload.kind.rawValue))
+        }
+
+        set(":title", try takeOption("--title", from: &arguments))
+        set(":platform", try takeOption("--platform", from: &arguments))
+        set(":area", try takeOption("--technology", from: &arguments))
+        if let kind = try takeOption("--kind", from: &arguments) {
+            set(":type_req", try webFeedbackType(kind))
+        }
+        set(":description", try takeOption("--description", from: &arguments))
+        set(":dev_app_name", try takeOption("--app", from: &arguments))
+        set(":dev_impact", try takeOption("--impact", from: &arguments))
+        if let mode = try takeOption("--foundation-models-mode", from: &arguments) {
+            let value: String
+            switch mode.lowercased() {
+            case "feedback":
+                value = "Share specific feedback"
+            case "samples":
+                value = "Upload model response samples"
+            default:
+                value = mode
+            }
+            set(":foundationmodels_type", value)
+        }
+
+        var customUpdates: [String: [String]] = [:]
+        for assignment in try takeOptions("--answer", from: &arguments) {
+            guard let separator = assignment.firstIndex(of: "=") else {
+                throw RelatoError.invalidArgument(
+                    "Invalid --answer value: \(assignment). Expected TAT=VALUE"
+                )
+            }
+            let tat = String(assignment[..<separator])
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let value = String(assignment[assignment.index(after: separator)...])
+            guard !tat.isEmpty, !value.isEmpty else {
+                throw RelatoError.invalidArgument(
+                    "Invalid --answer value: \(assignment). Expected non-empty TAT=VALUE"
+                )
+            }
+            customUpdates[tat, default: []].append(value)
+        }
+        for (tat, values) in customUpdates {
+            updates[tat] = values
+        }
+
+        guard !updates.isEmpty else {
+            throw RelatoError.invalidArgument(
+                "web drafts update requires --payload, a named field option, or --answer TAT=VALUE"
+            )
+        }
+        return updates
+    }
+
+    static func webFeedbackType(_ value: String) throws -> String {
+        switch value.lowercased() {
+        case "bug", "incorrect", "incorrect/unexpected behavior":
+            return "Incorrect/Unexpected Behavior"
+        case "suggestion":
+            return "Suggestion"
+        default:
+            throw RelatoError.invalidArgument(
+                "Invalid value for --kind: \(value). Expected bug or suggestion."
+            )
         }
     }
 
@@ -302,6 +730,18 @@ enum RelatoCLI {
         return arguments.remove(at: index)
     }
 
+    static func takeOptions(_ name: String, from arguments: inout [String]) throws -> [String] {
+        var values: [String] = []
+        while let index = arguments.firstIndex(of: name) {
+            arguments.remove(at: index)
+            guard index < arguments.count, !arguments[index].hasPrefix("--") else {
+                throw RelatoError.missingValue(name)
+            }
+            values.append(arguments.remove(at: index))
+        }
+        return values
+    }
+
     static func requireOption(_ name: String, from arguments: inout [String]) throws -> String {
         guard let value = try takeOption(name, from: &arguments), !value.isEmpty else {
             throw RelatoError.missingValue(name)
@@ -335,6 +775,109 @@ enum RelatoCLI {
         return seconds
     }
 
+    static func resolveWebPassword() throws -> String {
+        if let password = ProcessInfo.processInfo.environment[webPasswordEnvironment],
+            !password.isEmpty
+        {
+            return password
+        }
+        guard hasInteractiveTerminal() else {
+            throw RelatoError.invalidArgument(
+                "Apple Account password is required; run in a terminal or set \(webPasswordEnvironment)"
+            )
+        }
+        return try readSecret(prompt: "Apple Account password: ", trim: false)
+    }
+
+    static func resolveWebTwoFactorCode(
+        challenge: FeedbackWebTwoFactorChallenge,
+        command: String
+    ) throws -> String {
+        switch challenge.method {
+        case .trustedDevice:
+            writeStandardError("Enter the verification code shown on a trusted Apple device.\n")
+        case .phone:
+            if let destination = challenge.destination {
+                writeStandardError("Verification code sent to \(destination).\n")
+            } else {
+                writeStandardError("Verification code sent to a trusted phone number.\n")
+            }
+        }
+
+        if !command.isEmpty {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/sh")
+            process.arguments = ["-c", command]
+            let output = Pipe()
+            process.standardOutput = output
+            process.standardError = FileHandle.standardError
+            var environment = ProcessInfo.processInfo.environment
+            environment.removeValue(forKey: webPasswordEnvironment)
+            process.environment = environment
+            let outputData: Data
+            do {
+                try process.run()
+                outputData = output.fileHandleForReading.readDataToEndOfFile()
+                process.waitUntilExit()
+            } catch {
+                throw RelatoError.web("could not run the two-factor code command")
+            }
+            guard process.terminationStatus == 0 else {
+                throw RelatoError.web("the two-factor code command failed")
+            }
+            let code = String(
+                decoding: outputData,
+                as: UTF8.self
+            ).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !code.isEmpty else {
+                throw RelatoError.web("the two-factor code command returned no code")
+            }
+            return code
+        }
+
+        guard hasInteractiveTerminal() else {
+            throw RelatoError.invalidArgument(
+                "two-factor code is required; run in a terminal, pass --two-factor-code-command, or set \(webTwoFactorCommandEnvironment)"
+            )
+        }
+        return try readSecret(prompt: "Two-factor code: ", trim: true)
+    }
+
+    static func readSecret(prompt: String, trim: Bool) throws -> String {
+        let value: String? = prompt.withCString { promptPointer in
+            guard let result = getpass(promptPointer) else {
+                return nil
+            }
+            return String(cString: result)
+        }
+        guard let value else {
+            throw RelatoError.web("could not read secure terminal input")
+        }
+        let resolved = trim
+            ? value.trimmingCharacters(in: .whitespacesAndNewlines)
+            : value
+        guard !resolved.isEmpty else {
+            throw RelatoError.invalidArgument("secure terminal input cannot be empty")
+        }
+        return resolved
+    }
+
+    static func hasInteractiveTerminal() -> Bool {
+        if isatty(STDIN_FILENO) != 0 {
+            return true
+        }
+        let descriptor = Darwin.open("/dev/tty", O_RDWR | O_NOCTTY)
+        guard descriptor >= 0 else {
+            return false
+        }
+        Darwin.close(descriptor)
+        return true
+    }
+
+    static func writeStandardError(_ text: String) {
+        FileHandle.standardError.write(Data(text.utf8))
+    }
+
     static func friendlyDecodeError(_ error: Error) -> String {
         if case let DecodingError.dataCorrupted(context) = error {
             return context.debugDescription
@@ -355,10 +898,45 @@ enum RelatoCLI {
         NSString(string: path).expandingTildeInPath
     }
 
-    static func printJSON<T: Encodable>(_ value: T) throws {
+    static func printJSON<T: Encodable>(_ value: T, pretty: Bool = true) throws {
         let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.outputFormatting = pretty ? [.prettyPrinted, .sortedKeys] : [.sortedKeys]
         let data = try encoder.encode(value)
+        print(String(decoding: data, as: UTF8.self))
+    }
+
+    static func decodeWebJSON<T: Decodable>(
+        _ type: T.Type,
+        from data: Data,
+        name: String
+    ) throws -> T {
+        do {
+            return try JSONDecoder().decode(type, from: data)
+        } catch {
+            throw RelatoError.web(
+                "could not decode Apple's \(name) response: \(friendlyDecodeError(error))"
+            )
+        }
+    }
+
+    static func decodeJSONObject(_ data: Data) throws -> Any {
+        do {
+            return try JSONSerialization.jsonObject(with: data)
+        } catch {
+            throw RelatoError.web("Apple returned malformed JSON")
+        }
+    }
+
+    static func printJSONData(_ data: Data, pretty: Bool) throws {
+        try printJSONObject(decodeJSONObject(data), pretty: pretty)
+    }
+
+    static func printJSONObject(_ object: Any, pretty: Bool = true) throws {
+        guard JSONSerialization.isValidJSONObject(object) else {
+            throw RelatoError.web("could not encode JSON output")
+        }
+        let options: JSONSerialization.WritingOptions = pretty ? [.prettyPrinted, .sortedKeys] : []
+        let data = try JSONSerialization.data(withJSONObject: object, options: options)
         print(String(decoding: data, as: UTF8.self))
     }
 
@@ -466,6 +1044,8 @@ enum RelatoCLI {
             printFillHelp()
         case "store":
             printStoreHelp()
+        case "web":
+            printWebHelp()
         default:
             printHelp()
         }
@@ -477,8 +1057,9 @@ enum RelatoCLI {
             relato: agent-first tooling for Apple Feedback Assistant workflows
 
             RelatoKit is designed for coding agents preparing useful Feedback Assistant
-            reports through Apple's native macOS app. It keeps authentication, diagnostics,
-            and final submission inside Feedback Assistant.
+            reports. Its stable workflow uses Apple's native macOS app. The experimental
+            `web` command family provides headless access to Apple's undocumented
+            Feedback Assistant web service after an explicit Apple Account login.
 
             Agent workflow:
               1. Research the issue and write any supporting evidence to a local file.
@@ -506,6 +1087,21 @@ enum RelatoCLI {
               relato open-native [--payload PATH]
               relato fill [--payload PATH] [--select-popups]
               relato submit [--payload PATH] [--select-popups] [--wait-seconds N] [--verify-wait-seconds N] [--db PATH] [--confirm] [--verify-store] [--dry-run]
+              relato web auth login --apple-id EMAIL [--two-factor-code-command COMMAND]
+              relato web auth status
+              relato web auth logout
+              relato web inbox list [--locale LOCALE] [--team-id ID] [--compact]
+              relato web feedback view --id ID [--locale LOCALE] [--compact]
+              relato web feedback status --id ID [--locale LOCALE] [--compact]
+              relato web forms list [--locale LOCALE] [--team-id ID] [--compact]
+              relato web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]
+              relato web forms options --id ID [--tat TAT] [--locale LOCALE] [--team-id ID] [--compact]
+              relato web drafts create --form-id ID [--locale LOCALE] [--team-id ID] [--compact]
+              relato web drafts view --id ID [--locale LOCALE] [--compact]
+              relato web drafts update --id ID [--payload PATH] [field options] [--answer TAT=VALUE]... [--locale LOCALE] [--compact]
+              relato web drafts attach --id ID [--file PATH]... [--payload PATH] [--locale LOCALE] [--compact]
+              relato web drafts validate --id ID [--locale LOCALE] [--compact]
+              relato web drafts submit --id ID --confirm [--locale LOCALE] [--compact]
 
             Help topics:
               relato help payload
@@ -513,6 +1109,7 @@ enum RelatoCLI {
               relato help submit
               relato help fill
               relato help store
+              relato help web
 
             Safety:
               `--confirm` presses the native Submit button through Accessibility. It is not headless
@@ -523,6 +1120,12 @@ enum RelatoCLI {
               activates it for menu selection, and the app is hidden after launch/fill.
               Snapshot attachments are staged into the local Feedback Assistant draft
               folder in the background after the native draft exists.
+
+              `relato web` is unofficial and isolated from the stable native workflow.
+              Its endpoints may change without notice. Draft creation, inspection, and
+              schema-validated answer updates are supported. Attachment upload uses
+              Apple's file-promise protocol and verifies the result from the draft.
+              Final web submission is not yet exposed.
             """
         )
     }
@@ -658,10 +1261,142 @@ enum RelatoCLI {
             """
         )
     }
+
+    static func printWebHelp() {
+        print(
+            """
+            relato web: experimental Feedback Assistant web access
+
+            Status:
+              EXPERIMENTAL / UNOFFICIAL
+
+            This command family uses Apple's undocumented Appleseed web service. It is
+            separate from the public App Store Connect API and from ASC's private Iris API.
+            Endpoints and response schemas can change without notice.
+
+            Authentication:
+              relato web auth login --apple-id EMAIL [--two-factor-code-command COMMAND]
+                Performs Apple Account SRP authentication directly from Swift. The password
+                is read from a secure terminal prompt by default and is never stored.
+                Trusted-device and trusted-phone two-factor challenges are supported.
+                RelatoKit stores only the resulting cookies and a one-way account hash.
+
+              relato web auth status
+                Validates the cached session against Feedback Assistant.
+
+              relato web auth logout
+                Deletes the local session from the selected backend. It does not revoke
+                Apple sessions.
+
+            Login options and environment:
+              --apple-id EMAIL
+                Apple Account email. Defaults to RELATO_WEB_APPLE_ID.
+
+              --two-factor-code-command COMMAND
+                Runs COMMAND for each requested verification code and reads the code from
+                stdout. Defaults to RELATO_WEB_2FA_CODE_COMMAND. Without a command, an
+                interactive terminal prompt is used.
+
+              RELATO_WEB_PASSWORD
+                Supplies the password non-interactively. A secure terminal prompt is safer
+                for human use because environment variables may be exposed to child
+                processes or shell tooling.
+
+              RELATO_WEB_SESSION_BACKEND
+                Selects file or keychain session storage. The default is file, which avoids
+                recurring Keychain approval prompts for locally rebuilt unsigned binaries.
+
+              RELATO_WEB_SESSION_DIR
+                Overrides the file session directory. The default is ~/.relato/web.
+                RelatoKit enforces directory mode 0700 and session file mode 0600.
+
+            Headless boundary:
+              Password-based Apple Accounts, including trusted-device and trusted-phone 2FA,
+              can authenticate without WebKit, Chrome, or the ASC binary. Passkey-only
+              accounts and Apple Account actions that require a browser are not supported.
+
+            Inspection commands:
+              relato web inbox list [--locale LOCALE] [--team-id ID] [--compact]
+              relato web feedback view --id ID [--locale LOCALE] [--compact]
+                Reads Apple's server-backed feedback detail envelope, including the
+                submitted feedback ID and originating form-response ID.
+
+              relato web feedback status --id ID [--locale LOCALE] [--compact]
+                Reads Apple's current status rows for a submitted feedback report.
+
+              relato web forms list [--locale LOCALE] [--team-id ID] [--compact]
+              relato web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]
+              relato web forms options --id ID [--tat TAT] [--locale LOCALE] [--team-id ID] [--compact]
+                Emits normalized question metadata and label/value pairs. Use --tat to
+                inspect one semantic field, such as :platform or :area.
+
+            Draft commands:
+              relato web drafts create --form-id ID [--locale LOCALE] [--team-id ID] [--compact]
+                Creates a server-backed draft for a form returned by `web forms list`.
+                The Apple response, including the new form response ID, is emitted as JSON.
+
+              relato web drafts view --id ID [--locale LOCALE] [--compact]
+                Reads a server-backed draft, including its form ID, saved answers, and
+                attachment records.
+
+              relato web drafts update --id ID [--payload PATH] [field options] [--answer TAT=VALUE]... [--locale LOCALE] [--compact]
+                Fetches the current draft and form schema, preserves untouched answers,
+                resolves choice labels to Apple's values, validates text limits, and saves
+                the complete answer set.
+
+                Named field options:
+                  --title TEXT
+                  --platform VALUE
+                  --technology LABEL_OR_VALUE
+                  --kind bug|suggestion
+                  --description TEXT
+                  --app TEXT
+                  --impact TEXT
+                  --foundation-models-mode feedback|samples|APPLE_VALUE
+
+                --payload imports title, description, platform, category area, and kind
+                from a `relato prepare` JSON payload. Explicit named options override it.
+                Repeat --answer TAT=VALUE for conditional or form-specific questions.
+                Repeating the same TAT supplies multiple checkbox values.
+
+              relato web drafts attach --id ID [--file PATH]... [--payload PATH] [--locale LOCALE] [--compact]
+                Uploads one or more local files through Apple's file-promise sequence:
+                create, mark uploading, obtain a presigned object URL, upload raw bytes,
+                mark uploaded, and verify the persisted file promise from the draft.
+
+                Repeat --file to attach multiple files. --payload attaches the snapshot
+                path from a `relato prepare` JSON payload. Duplicate paths are uploaded once.
+                The command emits verified attachment receipts and never prints presigned URLs.
+
+              relato web drafts validate --id ID [--locale LOCALE] [--compact]
+                Fetches the draft and its current form schema, evaluates Apple's conditional
+                required fields, treats an uploaded file promise as satisfying a visible
+                Required File Zone, and emits a machine-readable readiness result.
+
+              relato web drafts submit --id ID --confirm [--locale LOCALE] [--compact]
+                Saves the complete answer set using Apple's submission representation,
+                submits the server-backed draft, and verifies the returned feedback ID
+                through Apple's feedback-detail endpoint.
+
+                --confirm is required and has no alias. This creates an Apple feedback
+                report and must be used only after explicit user confirmation at action time.
+                Survey drafts use a different Apple workflow and fail closed.
+
+            Output:
+              JSON is pretty-printed by default for agent inspection.
+              --compact emits compact JSON.
+
+            Boundaries:
+              This experiment creates, reads, edits, attaches files to, and submits
+              server-backed drafts. Survey submission remains unsupported, and the stable
+              native workflow is unchanged.
+            """
+        )
+    }
 }
 
 do {
-    try RelatoCLI.run(Array(CommandLine.arguments.dropFirst()))
+    try await RelatoCLI.run(Array(CommandLine.arguments.dropFirst()))
 } catch {
     FileHandle.standardError.write(Data("error: \(error)\n".utf8))
     Foundation.exit(1)

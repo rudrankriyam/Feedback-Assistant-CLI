@@ -12,6 +12,7 @@ This file is generated from live CLI help output. RelatoKit is optimized for age
 6. Inspect Feedback Assistant for native-only fields, popups, diagnostics, and staged attachments.
 7. Use `--confirm` only after explicit user confirmation.
 8. Use `relato store list` and `relato store uploads` as local evidence afterward; they are not Apple server receipts.
+9. Use `relato web` only for the isolated experimental read-only web workflow.
 
 ## Payload Contract
 
@@ -26,8 +27,9 @@ This file is generated from live CLI help output. RelatoKit is optimized for age
 relato: agent-first tooling for Apple Feedback Assistant workflows
 
 RelatoKit is designed for coding agents preparing useful Feedback Assistant
-reports through Apple's native macOS app. It keeps authentication, diagnostics,
-and final submission inside Feedback Assistant.
+reports. Its stable workflow uses Apple's native macOS app. The experimental
+`web` command family provides headless access to Apple's undocumented
+Feedback Assistant web service after an explicit Apple Account login.
 
 Agent workflow:
   1. Research the issue and write any supporting evidence to a local file.
@@ -55,6 +57,21 @@ Commands:
   relato open-native [--payload PATH]
   relato fill [--payload PATH] [--select-popups]
   relato submit [--payload PATH] [--select-popups] [--wait-seconds N] [--verify-wait-seconds N] [--db PATH] [--confirm] [--verify-store] [--dry-run]
+  relato web auth login --apple-id EMAIL [--two-factor-code-command COMMAND]
+  relato web auth status
+  relato web auth logout
+  relato web inbox list [--locale LOCALE] [--team-id ID] [--compact]
+  relato web feedback view --id ID [--locale LOCALE] [--compact]
+  relato web feedback status --id ID [--locale LOCALE] [--compact]
+  relato web forms list [--locale LOCALE] [--team-id ID] [--compact]
+  relato web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]
+  relato web forms options --id ID [--tat TAT] [--locale LOCALE] [--team-id ID] [--compact]
+  relato web drafts create --form-id ID [--locale LOCALE] [--team-id ID] [--compact]
+  relato web drafts view --id ID [--locale LOCALE] [--compact]
+  relato web drafts update --id ID [--payload PATH] [field options] [--answer TAT=VALUE]... [--locale LOCALE] [--compact]
+  relato web drafts attach --id ID [--file PATH]... [--payload PATH] [--locale LOCALE] [--compact]
+  relato web drafts validate --id ID [--locale LOCALE] [--compact]
+  relato web drafts submit --id ID --confirm [--locale LOCALE] [--compact]
 
 Help topics:
   relato help payload
@@ -62,6 +79,7 @@ Help topics:
   relato help submit
   relato help fill
   relato help store
+  relato help web
 
 Safety:
   `--confirm` presses the native Submit button through Accessibility. It is not headless
@@ -72,6 +90,12 @@ Safety:
   activates it for menu selection, and the app is hidden after launch/fill.
   Snapshot attachments are staged into the local Feedback Assistant draft
   folder in the background after the native draft exists.
+
+  `relato web` is unofficial and isolated from the stable native workflow.
+  Its endpoints may change without notice. Draft creation, inspection, and
+  schema-validated answer updates are supported. Attachment upload uses
+  Apple's file-promise protocol and verifies the result from the draft.
+  Final web submission is not yet exposed.
 ```
 
 To regenerate:
@@ -94,6 +118,21 @@ make generate-command-docs
 - `relato open-native [--payload PATH]`
 - `relato fill [--payload PATH] [--select-popups]`
 - `relato submit [--payload PATH] [--select-popups] [--wait-seconds N] [--verify-wait-seconds N] [--db PATH] [--confirm] [--verify-store] [--dry-run]`
+- `relato web auth login --apple-id EMAIL [--two-factor-code-command COMMAND]`
+- `relato web auth status`
+- `relato web auth logout`
+- `relato web inbox list [--locale LOCALE] [--team-id ID] [--compact]`
+- `relato web feedback view --id ID [--locale LOCALE] [--compact]`
+- `relato web feedback status --id ID [--locale LOCALE] [--compact]`
+- `relato web forms list [--locale LOCALE] [--team-id ID] [--compact]`
+- `relato web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]`
+- `relato web forms options --id ID [--tat TAT] [--locale LOCALE] [--team-id ID] [--compact]`
+- `relato web drafts create --form-id ID [--locale LOCALE] [--team-id ID] [--compact]`
+- `relato web drafts view --id ID [--locale LOCALE] [--compact]`
+- `relato web drafts update --id ID [--payload PATH] [field options] [--answer TAT=VALUE]... [--locale LOCALE] [--compact]`
+- `relato web drafts attach --id ID [--file PATH]... [--payload PATH] [--locale LOCALE] [--compact]`
+- `relato web drafts validate --id ID [--locale LOCALE] [--compact]`
+- `relato web drafts submit --id ID --confirm [--locale LOCALE] [--compact]`
 
 ## Topic Help
 
@@ -263,6 +302,136 @@ Notes:
   and upload tasks, but they are not Apple server receipts.
 ```
 
+### `relato help web`
+
+```sh
+relato web: experimental Feedback Assistant web access
+
+Status:
+  EXPERIMENTAL / UNOFFICIAL
+
+This command family uses Apple's undocumented Appleseed web service. It is
+separate from the public App Store Connect API and from ASC's private Iris API.
+Endpoints and response schemas can change without notice.
+
+Authentication:
+  relato web auth login --apple-id EMAIL [--two-factor-code-command COMMAND]
+    Performs Apple Account SRP authentication directly from Swift. The password
+    is read from a secure terminal prompt by default and is never stored.
+    Trusted-device and trusted-phone two-factor challenges are supported.
+    RelatoKit stores only the resulting cookies and a one-way account hash.
+
+  relato web auth status
+    Validates the cached session against Feedback Assistant.
+
+  relato web auth logout
+    Deletes the local session from the selected backend. It does not revoke
+    Apple sessions.
+
+Login options and environment:
+  --apple-id EMAIL
+    Apple Account email. Defaults to RELATO_WEB_APPLE_ID.
+
+  --two-factor-code-command COMMAND
+    Runs COMMAND for each requested verification code and reads the code from
+    stdout. Defaults to RELATO_WEB_2FA_CODE_COMMAND. Without a command, an
+    interactive terminal prompt is used.
+
+  RELATO_WEB_PASSWORD
+    Supplies the password non-interactively. A secure terminal prompt is safer
+    for human use because environment variables may be exposed to child
+    processes or shell tooling.
+
+  RELATO_WEB_SESSION_BACKEND
+    Selects file or keychain session storage. The default is file, which avoids
+    recurring Keychain approval prompts for locally rebuilt unsigned binaries.
+
+  RELATO_WEB_SESSION_DIR
+    Overrides the file session directory. The default is ~/.relato/web.
+    RelatoKit enforces directory mode 0700 and session file mode 0600.
+
+Headless boundary:
+  Password-based Apple Accounts, including trusted-device and trusted-phone 2FA,
+  can authenticate without WebKit, Chrome, or the ASC binary. Passkey-only
+  accounts and Apple Account actions that require a browser are not supported.
+
+Inspection commands:
+  relato web inbox list [--locale LOCALE] [--team-id ID] [--compact]
+  relato web feedback view --id ID [--locale LOCALE] [--compact]
+    Reads Apple's server-backed feedback detail envelope, including the
+    submitted feedback ID and originating form-response ID.
+
+  relato web feedback status --id ID [--locale LOCALE] [--compact]
+    Reads Apple's current status rows for a submitted feedback report.
+
+  relato web forms list [--locale LOCALE] [--team-id ID] [--compact]
+  relato web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]
+  relato web forms options --id ID [--tat TAT] [--locale LOCALE] [--team-id ID] [--compact]
+    Emits normalized question metadata and label/value pairs. Use --tat to
+    inspect one semantic field, such as :platform or :area.
+
+Draft commands:
+  relato web drafts create --form-id ID [--locale LOCALE] [--team-id ID] [--compact]
+    Creates a server-backed draft for a form returned by `web forms list`.
+    The Apple response, including the new form response ID, is emitted as JSON.
+
+  relato web drafts view --id ID [--locale LOCALE] [--compact]
+    Reads a server-backed draft, including its form ID, saved answers, and
+    attachment records.
+
+  relato web drafts update --id ID [--payload PATH] [field options] [--answer TAT=VALUE]... [--locale LOCALE] [--compact]
+    Fetches the current draft and form schema, preserves untouched answers,
+    resolves choice labels to Apple's values, validates text limits, and saves
+    the complete answer set.
+
+    Named field options:
+      --title TEXT
+      --platform VALUE
+      --technology LABEL_OR_VALUE
+      --kind bug|suggestion
+      --description TEXT
+      --app TEXT
+      --impact TEXT
+      --foundation-models-mode feedback|samples|APPLE_VALUE
+
+    --payload imports title, description, platform, category area, and kind
+    from a `relato prepare` JSON payload. Explicit named options override it.
+    Repeat --answer TAT=VALUE for conditional or form-specific questions.
+    Repeating the same TAT supplies multiple checkbox values.
+
+  relato web drafts attach --id ID [--file PATH]... [--payload PATH] [--locale LOCALE] [--compact]
+    Uploads one or more local files through Apple's file-promise sequence:
+    create, mark uploading, obtain a presigned object URL, upload raw bytes,
+    mark uploaded, and verify the persisted file promise from the draft.
+
+    Repeat --file to attach multiple files. --payload attaches the snapshot
+    path from a `relato prepare` JSON payload. Duplicate paths are uploaded once.
+    The command emits verified attachment receipts and never prints presigned URLs.
+
+  relato web drafts validate --id ID [--locale LOCALE] [--compact]
+    Fetches the draft and its current form schema, evaluates Apple's conditional
+    required fields, treats an uploaded file promise as satisfying a visible
+    Required File Zone, and emits a machine-readable readiness result.
+
+  relato web drafts submit --id ID --confirm [--locale LOCALE] [--compact]
+    Saves the complete answer set using Apple's submission representation,
+    submits the server-backed draft, and verifies the returned feedback ID
+    through Apple's feedback-detail endpoint.
+
+    --confirm is required and has no alias. This creates an Apple feedback
+    report and must be used only after explicit user confirmation at action time.
+    Survey drafts use a different Apple workflow and fail closed.
+
+Output:
+  JSON is pretty-printed by default for agent inspection.
+  --compact emits compact JSON.
+
+Boundaries:
+  This experiment creates, reads, edits, attaches files to, and submits
+  server-backed drafts. Survey submission remains unsupported, and the stable
+  native workflow is unchanged.
+```
+
 ## Scripting Tips
 
 - Use `relato submit --dry-run` before `--confirm` to preview the native handoff plan.
@@ -272,3 +441,5 @@ Notes:
 - Use `relato store summary` and `relato store list` for local verification after native submission.
 - Treat local store verification as local evidence, not an Apple server receipt.
 - `--select-popups` briefly activates Feedback Assistant to select native platform, area, and type menus.
+- Use `relato web auth status` before experimental read-only web requests.
+- Treat `relato web` response schemas as unstable and preserve raw JSON when debugging.

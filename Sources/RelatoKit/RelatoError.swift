@@ -6,6 +6,7 @@ public enum RelatoError: Error, CustomStringConvertible {
     case missingFile(String)
     case sqlite(String)
     case processFailed(String, Int32)
+    case web(String)
 
     public var description: String {
         switch self {
@@ -19,6 +20,8 @@ public enum RelatoError: Error, CustomStringConvertible {
             return "SQLite error: \(message)"
         case .processFailed(let command, let status):
             return "\(command) failed with exit code \(status)"
+        case .web(let message):
+            return "Feedback Assistant web error: \(message)"
         }
     }
 }
