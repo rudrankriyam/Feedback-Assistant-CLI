@@ -62,6 +62,7 @@ Commands:
   relato web auth logout
   relato web inbox list [--locale LOCALE] [--team-id ID] [--compact]
   relato web feedback view --id ID [--locale LOCALE] [--compact]
+  relato web feedback status --id ID [--locale LOCALE] [--compact]
   relato web forms list [--locale LOCALE] [--team-id ID] [--compact]
   relato web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]
   relato web forms options --id ID [--tat TAT] [--locale LOCALE] [--team-id ID] [--compact]
@@ -120,6 +121,7 @@ make generate-command-docs
 - `relato web auth logout`
 - `relato web inbox list [--locale LOCALE] [--team-id ID] [--compact]`
 - `relato web feedback view --id ID [--locale LOCALE] [--compact]`
+- `relato web feedback status --id ID [--locale LOCALE] [--compact]`
 - `relato web forms list [--locale LOCALE] [--team-id ID] [--compact]`
 - `relato web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]`
 - `relato web forms options --id ID [--tat TAT] [--locale LOCALE] [--team-id ID] [--compact]`
@@ -345,6 +347,9 @@ Inspection commands:
   relato web feedback view --id ID [--locale LOCALE] [--compact]
     Reads Apple's server-backed feedback detail envelope, including the
     submitted feedback ID and originating form-response ID.
+
+  relato web feedback status --id ID [--locale LOCALE] [--compact]
+    Reads Apple's current status rows for a submitted feedback report.
 
   relato web forms list [--locale LOCALE] [--team-id ID] [--compact]
   relato web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]
