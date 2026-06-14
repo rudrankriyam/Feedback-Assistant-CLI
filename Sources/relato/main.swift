@@ -258,7 +258,7 @@ enum RelatoCLI {
         var arguments = rawArguments
         guard !arguments.isEmpty else {
             throw RelatoError.invalidArgument(
-                "web drafts requires a subcommand: create, view, update, attach"
+                "web drafts requires a subcommand: create, view, update, attach, validate"
             )
         }
 
@@ -353,6 +353,16 @@ enum RelatoCLI {
                 )
             }
             try printJSON(receipts, pretty: !compact)
+            return
+        case "validate":
+            let id = try requireOption("--id", from: &arguments)
+            try ensureNoArguments(arguments)
+            let client = try makeFeedbackWebClient()
+            let preflight = try await client.submissionPreflight(
+                id: id,
+                locale: locale
+            )
+            try printJSON(preflight, pretty: !compact)
             return
         default:
             throw RelatoError.invalidArgument("Unknown web drafts subcommand: \(subcommand)")
@@ -1065,6 +1075,7 @@ enum RelatoCLI {
               relato web drafts view --id ID [--locale LOCALE] [--compact]
               relato web drafts update --id ID [--payload PATH] [field options] [--answer TAT=VALUE]... [--locale LOCALE] [--compact]
               relato web drafts attach --id ID [--file PATH]... [--payload PATH] [--locale LOCALE] [--compact]
+              relato web drafts validate --id ID [--locale LOCALE] [--compact]
 
             Help topics:
               relato help payload
@@ -1321,6 +1332,11 @@ enum RelatoCLI {
                 Repeat --file to attach multiple files. --payload attaches the snapshot
                 path from a `relato prepare` JSON payload. Duplicate paths are uploaded once.
                 The command emits verified attachment receipts and never prints presigned URLs.
+
+              relato web drafts validate --id ID [--locale LOCALE] [--compact]
+                Fetches the draft and its current form schema, evaluates Apple's conditional
+                required fields, treats an uploaded file promise as satisfying a visible
+                Required File Zone, and emits a machine-readable readiness result.
 
             Output:
               JSON is pretty-printed by default for agent inspection.

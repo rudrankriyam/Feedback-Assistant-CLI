@@ -168,6 +168,32 @@ public actor FeedbackWebClient {
         )
     }
 
+    public func submissionPreflight(
+        id: String,
+        locale: String = "en"
+    ) async throws -> FeedbackWebSubmissionPreflight {
+        let draftData = try await draft(id: id, locale: locale)
+        let draft = try decodeWebResponse(
+            FeedbackWebDraft.self,
+            from: draftData,
+            name: "draft"
+        )
+        let formData = try await form(
+            id: String(draft.formID),
+            locale: locale,
+            teamID: draft.teamID
+        )
+        let form = try decodeWebResponse(
+            FeedbackWebFormSchema.self,
+            from: formData,
+            name: "form schema"
+        )
+        return try FeedbackWebSubmissionValidator.preflight(
+            draft: draft,
+            form: form
+        )
+    }
+
     public func updateDraftAnswers(
         id: String,
         locale: String = "en",

@@ -70,6 +70,7 @@ Commands:
   relato web drafts view --id ID [--locale LOCALE] [--compact]
   relato web drafts update --id ID [--payload PATH] [field options] [--answer TAT=VALUE]... [--locale LOCALE] [--compact]
   relato web drafts attach --id ID [--file PATH]... [--payload PATH] [--locale LOCALE] [--compact]
+  relato web drafts validate --id ID [--locale LOCALE] [--compact]
 
 Help topics:
   relato help payload
@@ -129,6 +130,7 @@ make generate-command-docs
 - `relato web drafts view --id ID [--locale LOCALE] [--compact]`
 - `relato web drafts update --id ID [--payload PATH] [field options] [--answer TAT=VALUE]... [--locale LOCALE] [--compact]`
 - `relato web drafts attach --id ID [--file PATH]... [--payload PATH] [--locale LOCALE] [--compact]`
+- `relato web drafts validate --id ID [--locale LOCALE] [--compact]`
 
 ## Topic Help
 
@@ -394,6 +396,11 @@ Draft commands:
     Repeat --file to attach multiple files. --payload attaches the snapshot
     path from a `relato prepare` JSON payload. Duplicate paths are uploaded once.
     The command emits verified attachment receipts and never prints presigned URLs.
+
+  relato web drafts validate --id ID [--locale LOCALE] [--compact]
+    Fetches the draft and its current form schema, evaluates Apple's conditional
+    required fields, treats an uploaded file promise as satisfying a visible
+    Required File Zone, and emits a machine-readable readiness result.
 
 Output:
   JSON is pretty-printed by default for agent inspection.
