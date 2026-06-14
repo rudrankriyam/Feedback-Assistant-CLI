@@ -212,26 +212,32 @@ enum RelatoCLI {
     static func runWebDrafts(_ rawArguments: [String]) async throws {
         var arguments = rawArguments
         guard !arguments.isEmpty else {
-            throw RelatoError.invalidArgument("web drafts requires the create subcommand")
+            throw RelatoError.invalidArgument("web drafts requires a subcommand: create, view")
         }
 
         let subcommand = arguments.removeFirst()
-        guard subcommand == "create" else {
+        let locale = try takeOption("--locale", from: &arguments) ?? "en"
+        let compact = takeFlag("--compact", from: &arguments)
+        let client = try makeFeedbackWebClient()
+
+        let data: Data
+        switch subcommand {
+        case "create":
+            let formID = try requireOption("--form-id", from: &arguments)
+            let teamID = try takeOption("--team-id", from: &arguments)
+            try ensureNoArguments(arguments)
+            data = try await client.createDraft(
+                formID: formID,
+                locale: locale,
+                teamID: teamID
+            )
+        case "view":
+            let id = try requireOption("--id", from: &arguments)
+            try ensureNoArguments(arguments)
+            data = try await client.draft(id: id, locale: locale)
+        default:
             throw RelatoError.invalidArgument("Unknown web drafts subcommand: \(subcommand)")
         }
-
-        let formID = try requireOption("--form-id", from: &arguments)
-        let locale = try takeOption("--locale", from: &arguments) ?? "en"
-        let teamID = try takeOption("--team-id", from: &arguments)
-        let compact = takeFlag("--compact", from: &arguments)
-        try ensureNoArguments(arguments)
-
-        let client = try makeFeedbackWebClient()
-        let data = try await client.createDraft(
-            formID: formID,
-            locale: locale,
-            teamID: teamID
-        )
         try printJSONData(data, pretty: !compact)
     }
 
@@ -827,6 +833,7 @@ enum RelatoCLI {
               relato web forms list [--locale LOCALE] [--team-id ID] [--compact]
               relato web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]
               relato web drafts create --form-id ID [--locale LOCALE] [--team-id ID] [--compact]
+              relato web drafts view --id ID [--locale LOCALE] [--compact]
 
             Help topics:
               relato help payload
@@ -1038,6 +1045,10 @@ enum RelatoCLI {
               relato web drafts create --form-id ID [--locale LOCALE] [--team-id ID] [--compact]
                 Creates a server-backed draft for a form returned by `web forms list`.
                 The Apple response, including the new form response ID, is emitted as JSON.
+
+              relato web drafts view --id ID [--locale LOCALE] [--compact]
+                Reads a server-backed draft, including its form ID, saved answers, and
+                attachment records.
 
             Output:
               JSON is pretty-printed by default for agent inspection.

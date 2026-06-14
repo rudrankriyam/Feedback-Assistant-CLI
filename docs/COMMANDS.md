@@ -64,6 +64,7 @@ Commands:
   relato web forms list [--locale LOCALE] [--team-id ID] [--compact]
   relato web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]
   relato web drafts create --form-id ID [--locale LOCALE] [--team-id ID] [--compact]
+  relato web drafts view --id ID [--locale LOCALE] [--compact]
 
 Help topics:
   relato help payload
@@ -115,6 +116,7 @@ make generate-command-docs
 - `relato web forms list [--locale LOCALE] [--team-id ID] [--compact]`
 - `relato web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]`
 - `relato web drafts create --form-id ID [--locale LOCALE] [--team-id ID] [--compact]`
+- `relato web drafts view --id ID [--locale LOCALE] [--compact]`
 
 ## Topic Help
 
@@ -337,6 +339,10 @@ Draft commands:
   relato web drafts create --form-id ID [--locale LOCALE] [--team-id ID] [--compact]
     Creates a server-backed draft for a form returned by `web forms list`.
     The Apple response, including the new form response ID, is emitted as JSON.
+
+  relato web drafts view --id ID [--locale LOCALE] [--compact]
+    Reads a server-backed draft, including its form ID, saved answers, and
+    attachment records.
 
 Output:
   JSON is pretty-printed by default for agent inspection.

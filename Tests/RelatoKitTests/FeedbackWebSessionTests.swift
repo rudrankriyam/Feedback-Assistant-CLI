@@ -271,6 +271,47 @@ struct FeedbackWebClientTests {
         )
         #expect(object == ["team_id": "team 42"])
     }
+
+    @Test func readsServerBackedDraft() async throws {
+        defer {
+            FeedbackWebMockURLProtocol.handler = nil
+            FeedbackWebMockURLProtocol.lastRequest = nil
+            FeedbackWebMockURLProtocol.lastRequestBody = nil
+        }
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [FeedbackWebMockURLProtocol.self]
+        FeedbackWebMockURLProtocol.handler = { request in
+            let response = HTTPURLResponse(
+                url: try #require(request.url),
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            return (
+                response,
+                Data(#"{"id":104688952,"form_id":4167,"answers":[]}"#.utf8)
+            )
+        }
+
+        let client = FeedbackWebClient(
+            session: FeedbackWebSession(cookies: []),
+            configuration: configuration
+        )
+        let data = try await client.draft(id: "104688952", locale: "en")
+
+        #expect(
+            String(decoding: data, as: UTF8.self)
+                == #"{"id":104688952,"form_id":4167,"answers":[]}"#
+        )
+        let request = try #require(FeedbackWebMockURLProtocol.lastRequest)
+        #expect(request.httpMethod == "GET")
+        #expect(
+            request.url?.absoluteString
+                == "https://appleseed.apple.com/sp/en/feedback/form_responses/104688952"
+        )
+        #expect(FeedbackWebMockURLProtocol.lastRequestBody == nil)
+    }
 }
 
 private final class FeedbackWebMockURLProtocol: URLProtocol, @unchecked Sendable {

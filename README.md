@@ -165,6 +165,7 @@ relato web inbox list [--locale LOCALE] [--team-id ID] [--compact]
 relato web forms list [--locale LOCALE] [--team-id ID] [--compact]
 relato web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]
 relato web drafts create --form-id ID [--locale LOCALE] [--team-id ID] [--compact]
+relato web drafts view --id ID [--locale LOCALE] [--compact]
 relato version
 ```
 
@@ -202,6 +203,7 @@ relato web inbox list
 relato web forms list
 relato web forms view --id FORM_ID
 relato web drafts create --form-id FORM_ID
+relato web drafts view --id DRAFT_ID
 ```
 
 These commands emit Apple's JSON response directly. Use `--compact` for compact JSON and `--team-id ID` for a team-scoped request. Draft creation returns the new `form_response.id`, which later draft commands use.

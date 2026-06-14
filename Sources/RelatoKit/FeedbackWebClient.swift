@@ -132,6 +132,18 @@ public actor FeedbackWebClient {
         )
     }
 
+    public func draft(
+        id: String,
+        locale: String = "en"
+    ) async throws -> Data {
+        let draftID = try pathSegment(id, name: "draft id")
+        return try await request(
+            method: "GET",
+            path: "\(validatedLocale(locale))/feedback/form_responses/\(draftID)",
+            locale: locale
+        )
+    }
+
     public func currentSession() -> FeedbackWebSession {
         session
     }
