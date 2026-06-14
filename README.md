@@ -10,7 +10,7 @@ Local-first Swift tools for preparing and inspecting Feedback Assistant reports 
 
 RelatoKit (from the Portuguese `relato`, meaning report or account) provides a local-first Swift CLI and library for preparing Feedback Assistant reports on macOS. It can inspect the local Feedback Assistant store, generate structured report payloads, open Apple's native app, and assist with form entry through Accessibility automation.
 
-The stable workflow keeps authentication, diagnostics, and final submission inside Feedback Assistant. An isolated `relato web` experiment adds read-only access to Apple's undocumented Feedback Assistant web service through a headless Swift implementation of Apple's password-based SRP login and a Keychain-backed session. It does not yet create drafts, upload files, or submit feedback.
+The stable workflow keeps authentication, diagnostics, and final submission inside Feedback Assistant. An isolated `relato web` experiment accesses Apple's undocumented Feedback Assistant web service through a headless Swift implementation of Apple's password-based SRP login and a Keychain-backed session. It can inspect Apple's form catalog and create server-backed drafts; answer updates, uploads, and web submission remain under active validation.
 
 The CLI is optimized for agent workflows: create a machine-readable JSON payload, review the generated Markdown report, open and fill the native app, inspect Apple-only fields, and click Submit only after explicit confirmation.
 
@@ -79,6 +79,7 @@ The experimental web command family additionally provides:
 - Feedback Assistant session storage in macOS Keychain
 - live session validation against Apple's Appleseed service
 - read-only inbox, form catalog, and form schema JSON
+- server-backed draft creation from a form ID
 
 ## First Commands
 
@@ -163,6 +164,7 @@ relato web auth logout
 relato web inbox list [--locale LOCALE] [--team-id ID] [--compact]
 relato web forms list [--locale LOCALE] [--team-id ID] [--compact]
 relato web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]
+relato web drafts create --form-id ID [--locale LOCALE] [--team-id ID] [--compact]
 relato version
 ```
 
@@ -178,7 +180,7 @@ relato help web
 
 ## Experimental Web Access
 
-`relato web` is an isolated, read-only experiment inspired by the detached `asc web` command family. It uses `https://appleseed.apple.com/sp/`, not the public App Store Connect API and not ASC's private Iris API.
+`relato web` is an isolated experiment inspired by the detached `asc web` command family. It uses `https://appleseed.apple.com/sp/`, not the public App Store Connect API and not ASC's private Iris API.
 
 Authenticate:
 
@@ -199,9 +201,10 @@ Inspect server data:
 relato web inbox list
 relato web forms list
 relato web forms view --id FORM_ID
+relato web drafts create --form-id FORM_ID
 ```
 
-These commands emit Apple's JSON response directly. Use `--compact` for compact JSON and `--team-id ID` for a team-scoped request.
+These commands emit Apple's JSON response directly. Use `--compact` for compact JSON and `--team-id ID` for a team-scoped request. Draft creation returns the new `form_response.id`, which later draft commands use.
 
 Clear the cached session:
 
@@ -209,7 +212,7 @@ Clear the cached session:
 relato web auth logout
 ```
 
-This surface is unofficial and may break without notice. The branch intentionally excludes web draft creation, answer updates, attachment upload, and submission until authentication, CSRF refresh, endpoint behavior, and response contracts have been validated independently.
+This surface is unofficial and may break without notice. Draft creation has been validated against Apple's web client. Answer updates, attachment upload, and submission remain excluded until each endpoint and response contract is validated independently.
 
 ## Automation Model
 

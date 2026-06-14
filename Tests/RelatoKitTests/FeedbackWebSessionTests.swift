@@ -140,6 +140,7 @@ struct FeedbackWebClientTests {
         defer {
             FeedbackWebMockURLProtocol.handler = nil
             FeedbackWebMockURLProtocol.lastRequest = nil
+            FeedbackWebMockURLProtocol.lastRequestBody = nil
         }
 
         let configuration = URLSessionConfiguration.ephemeral
@@ -197,6 +198,7 @@ struct FeedbackWebClientTests {
         defer {
             FeedbackWebMockURLProtocol.handler = nil
             FeedbackWebMockURLProtocol.lastRequest = nil
+            FeedbackWebMockURLProtocol.lastRequestBody = nil
         }
 
         let configuration = URLSessionConfiguration.ephemeral
@@ -222,12 +224,60 @@ struct FeedbackWebClientTests {
             try await client.authenticate()
         }
     }
+
+    @Test func createsServerBackedDraftForForm() async throws {
+        defer {
+            FeedbackWebMockURLProtocol.handler = nil
+            FeedbackWebMockURLProtocol.lastRequest = nil
+            FeedbackWebMockURLProtocol.lastRequestBody = nil
+        }
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [FeedbackWebMockURLProtocol.self]
+        FeedbackWebMockURLProtocol.handler = { request in
+            let response = HTTPURLResponse(
+                url: try #require(request.url),
+                statusCode: 201,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            return (response, Data(#"{"form_response":{"id":104688952}}"#.utf8))
+        }
+
+        let client = FeedbackWebClient(
+            session: FeedbackWebSession(cookies: []),
+            configuration: configuration
+        )
+        let data = try await client.createDraft(
+            formID: "4167",
+            locale: "en",
+            teamID: " team 42 "
+        )
+
+        #expect(
+            String(decoding: data, as: UTF8.self)
+                == #"{"form_response":{"id":104688952}}"#
+        )
+        let request = try #require(FeedbackWebMockURLProtocol.lastRequest)
+        #expect(request.httpMethod == "POST")
+        #expect(
+            request.url?.absoluteString
+                == "https://appleseed.apple.com/sp/en/feedback/forms/4167/form_responses/start.json"
+        )
+        #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
+        let body = try #require(FeedbackWebMockURLProtocol.lastRequestBody)
+        let object = try #require(
+            JSONSerialization.jsonObject(with: body) as? [String: String]
+        )
+        #expect(object == ["team_id": "team 42"])
+    }
 }
 
 private final class FeedbackWebMockURLProtocol: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var handler:
         ((URLRequest) throws -> (HTTPURLResponse, Data))?
     nonisolated(unsafe) static var lastRequest: URLRequest?
+    nonisolated(unsafe) static var lastRequestBody: Data?
 
     override class func canInit(with request: URLRequest) -> Bool {
         true
@@ -239,6 +289,7 @@ private final class FeedbackWebMockURLProtocol: URLProtocol, @unchecked Sendable
 
     override func startLoading() {
         Self.lastRequest = request
+        Self.lastRequestBody = Self.bodyData(from: request)
         do {
             guard let handler = Self.handler else {
                 throw RelatoError.web("missing mock URL handler")
@@ -253,4 +304,26 @@ private final class FeedbackWebMockURLProtocol: URLProtocol, @unchecked Sendable
     }
 
     override func stopLoading() {}
+
+    private static func bodyData(from request: URLRequest) -> Data? {
+        if let body = request.httpBody {
+            return body
+        }
+        guard let stream = request.httpBodyStream else {
+            return nil
+        }
+
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 4_096)
+        while stream.hasBytesAvailable {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            guard count > 0 else {
+                break
+            }
+            data.append(buffer, count: count)
+        }
+        return data
+    }
 }

@@ -81,6 +81,8 @@ enum RelatoCLI {
             try await runWebInbox(arguments)
         case "forms":
             try await runWebForms(arguments)
+        case "drafts":
+            try await runWebDrafts(arguments)
         default:
             throw RelatoError.invalidArgument("Unknown web subcommand: \(subcommand)")
         }
@@ -204,6 +206,32 @@ enum RelatoCLI {
         default:
             throw RelatoError.invalidArgument("Unknown web forms subcommand: \(subcommand)")
         }
+        try printJSONData(data, pretty: !compact)
+    }
+
+    static func runWebDrafts(_ rawArguments: [String]) async throws {
+        var arguments = rawArguments
+        guard !arguments.isEmpty else {
+            throw RelatoError.invalidArgument("web drafts requires the create subcommand")
+        }
+
+        let subcommand = arguments.removeFirst()
+        guard subcommand == "create" else {
+            throw RelatoError.invalidArgument("Unknown web drafts subcommand: \(subcommand)")
+        }
+
+        let formID = try requireOption("--form-id", from: &arguments)
+        let locale = try takeOption("--locale", from: &arguments) ?? "en"
+        let teamID = try takeOption("--team-id", from: &arguments)
+        let compact = takeFlag("--compact", from: &arguments)
+        try ensureNoArguments(arguments)
+
+        let client = try makeFeedbackWebClient()
+        let data = try await client.createDraft(
+            formID: formID,
+            locale: locale,
+            teamID: teamID
+        )
         try printJSONData(data, pretty: !compact)
     }
 
@@ -798,6 +826,7 @@ enum RelatoCLI {
               relato web inbox list [--locale LOCALE] [--team-id ID] [--compact]
               relato web forms list [--locale LOCALE] [--team-id ID] [--compact]
               relato web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]
+              relato web drafts create --form-id ID [--locale LOCALE] [--team-id ID] [--compact]
 
             Help topics:
               relato help payload
@@ -817,9 +846,9 @@ enum RelatoCLI {
               Snapshot attachments are staged into the local Feedback Assistant draft
               folder in the background after the native draft exists.
 
-              `relato web` is unofficial, read-only, and isolated from the stable native
-              workflow. Its endpoints may change without notice. It does not create drafts,
-              upload files, or submit feedback.
+              `relato web` is unofficial and isolated from the stable native workflow.
+              Its endpoints may change without notice. Draft creation is supported, but
+              answer updates, attachment upload, and submission are not yet exposed.
             """
         )
     }
@@ -959,10 +988,10 @@ enum RelatoCLI {
     static func printWebHelp() {
         print(
             """
-            relato web: experimental read-only Feedback Assistant web access
+            relato web: experimental Feedback Assistant web access
 
             Status:
-              EXPERIMENTAL / UNOFFICIAL / READ-ONLY
+              EXPERIMENTAL / UNOFFICIAL
 
             This command family uses Apple's undocumented Appleseed web service. It is
             separate from the public App Store Connect API and from ASC's private Iris API.
@@ -1000,18 +1029,23 @@ enum RelatoCLI {
               can authenticate without WebKit, Chrome, or the ASC binary. Passkey-only
               accounts and Apple Account actions that require a browser are not supported.
 
-            Read-only commands:
+            Inspection commands:
               relato web inbox list [--locale LOCALE] [--team-id ID] [--compact]
               relato web forms list [--locale LOCALE] [--team-id ID] [--compact]
               relato web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]
+
+            Draft commands:
+              relato web drafts create --form-id ID [--locale LOCALE] [--team-id ID] [--compact]
+                Creates a server-backed draft for a form returned by `web forms list`.
+                The Apple response, including the new form response ID, is emitted as JSON.
 
             Output:
               JSON is pretty-printed by default for agent inspection.
               --compact emits compact JSON.
 
             Boundaries:
-              This experiment does not create or edit drafts, upload attachments, answer
-              questions, or submit feedback. The stable native workflow is unchanged.
+              This experiment creates drafts but does not yet edit answers, upload
+              attachments, or submit feedback. The stable native workflow is unchanged.
             """
         )
     }

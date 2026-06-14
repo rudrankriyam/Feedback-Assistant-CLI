@@ -63,6 +63,7 @@ Commands:
   relato web inbox list [--locale LOCALE] [--team-id ID] [--compact]
   relato web forms list [--locale LOCALE] [--team-id ID] [--compact]
   relato web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]
+  relato web drafts create --form-id ID [--locale LOCALE] [--team-id ID] [--compact]
 
 Help topics:
   relato help payload
@@ -82,9 +83,9 @@ Safety:
   Snapshot attachments are staged into the local Feedback Assistant draft
   folder in the background after the native draft exists.
 
-  `relato web` is unofficial, read-only, and isolated from the stable native
-  workflow. Its endpoints may change without notice. It does not create drafts,
-  upload files, or submit feedback.
+  `relato web` is unofficial and isolated from the stable native workflow.
+  Its endpoints may change without notice. Draft creation is supported, but
+  answer updates, attachment upload, and submission are not yet exposed.
 ```
 
 To regenerate:
@@ -113,6 +114,7 @@ make generate-command-docs
 - `relato web inbox list [--locale LOCALE] [--team-id ID] [--compact]`
 - `relato web forms list [--locale LOCALE] [--team-id ID] [--compact]`
 - `relato web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]`
+- `relato web drafts create --form-id ID [--locale LOCALE] [--team-id ID] [--compact]`
 
 ## Topic Help
 
@@ -285,10 +287,10 @@ Notes:
 ### `relato help web`
 
 ```sh
-relato web: experimental read-only Feedback Assistant web access
+relato web: experimental Feedback Assistant web access
 
 Status:
-  EXPERIMENTAL / UNOFFICIAL / READ-ONLY
+  EXPERIMENTAL / UNOFFICIAL
 
 This command family uses Apple's undocumented Appleseed web service. It is
 separate from the public App Store Connect API and from ASC's private Iris API.
@@ -326,18 +328,23 @@ Headless boundary:
   can authenticate without WebKit, Chrome, or the ASC binary. Passkey-only
   accounts and Apple Account actions that require a browser are not supported.
 
-Read-only commands:
+Inspection commands:
   relato web inbox list [--locale LOCALE] [--team-id ID] [--compact]
   relato web forms list [--locale LOCALE] [--team-id ID] [--compact]
   relato web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]
+
+Draft commands:
+  relato web drafts create --form-id ID [--locale LOCALE] [--team-id ID] [--compact]
+    Creates a server-backed draft for a form returned by `web forms list`.
+    The Apple response, including the new form response ID, is emitted as JSON.
 
 Output:
   JSON is pretty-printed by default for agent inspection.
   --compact emits compact JSON.
 
 Boundaries:
-  This experiment does not create or edit drafts, upload attachments, answer
-  questions, or submit feedback. The stable native workflow is unchanged.
+  This experiment creates drafts but does not yet edit answers, upload
+  attachments, or submit feedback. The stable native workflow is unchanged.
 ```
 
 ## Scripting Tips

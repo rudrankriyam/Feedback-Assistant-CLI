@@ -109,6 +109,29 @@ public actor FeedbackWebClient {
         return try await request(method: "GET", path: path, locale: locale)
     }
 
+    public func createDraft(
+        formID: String,
+        locale: String = "en",
+        teamID: String? = nil
+    ) async throws -> Data {
+        let formID = try pathSegment(formID, name: "form id")
+        var payload: [String: String] = [:]
+        if let teamID {
+            let value = teamID.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !value.isEmpty {
+                payload["team_id"] = value
+            }
+        }
+        let body = try JSONSerialization.data(withJSONObject: payload)
+        return try await request(
+            method: "POST",
+            path:
+                "\(validatedLocale(locale))/feedback/forms/\(formID)/form_responses/start.json",
+            locale: locale,
+            body: body
+        )
+    }
+
     public func currentSession() -> FeedbackWebSession {
         session
     }
@@ -116,7 +139,8 @@ public actor FeedbackWebClient {
     private func request(
         method: String,
         path: String,
-        locale: String
+        locale: String,
+        body: Data? = nil
     ) async throws -> Data {
         guard
             !path.hasPrefix("/"),
@@ -128,8 +152,12 @@ public actor FeedbackWebClient {
 
         var request = URLRequest(url: url)
         request.httpMethod = method
+        request.httpBody = body
         request.timeoutInterval = 60
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if body != nil {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        }
         request.setValue(FeedbackWebAPI.apiVersion, forHTTPHeaderField: "X-SP-API")
         request.setValue(try validatedLocale(locale), forHTTPHeaderField: "locale")
         request.setValue(FeedbackWebAPI.webBase.absoluteString, forHTTPHeaderField: "Origin")
