@@ -5,12 +5,14 @@ public struct FeedbackWebDraft: Decodable, Sendable {
     public let formID: Int
     public let teamID: String?
     public let answers: [FeedbackWebDraftAnswer]
+    public let filePromises: [FeedbackWebFilePromise]
 
     enum CodingKeys: String, CodingKey {
         case id
         case formID = "form_id"
         case teamID = "team_id"
         case answers
+        case filePromises = "file_promises"
     }
 
     public init(from decoder: Decoder) throws {
@@ -19,6 +21,8 @@ public struct FeedbackWebDraft: Decodable, Sendable {
         formID = try container.decode(Int.self, forKey: .formID)
         teamID = try container.decodeIfPresent(FeedbackWebStringID.self, forKey: .teamID)?.value
         answers = try container.decodeIfPresent([FeedbackWebDraftAnswer].self, forKey: .answers) ?? []
+        filePromises =
+            try container.decodeIfPresent([FeedbackWebFilePromise].self, forKey: .filePromises) ?? []
     }
 }
 
@@ -38,6 +42,42 @@ public struct FeedbackWebDraftAnswer: Decodable, Sendable, Equatable {
         questionID = try container.decode(Int.self, forKey: .questionID)
         values = try container.decodeIfPresent([String].self, forKey: .values) ?? []
         ignoreRequired = try container.decodeIfPresent(Bool.self, forKey: .ignoreRequired) ?? false
+    }
+}
+
+public struct FeedbackWebFilePromise: Decodable, Sendable, Equatable {
+    public let id: Int
+    public let uuid: String
+    public let name: String
+    public let size: Int
+    public let status: Int
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case uuid
+        case name
+        case size
+        case status = "status_enum"
+    }
+}
+
+public struct FeedbackWebAttachmentReceipt: Encodable, Sendable, Equatable {
+    public let draftID: Int
+    public let id: Int
+    public let uuid: String
+    public let name: String
+    public let size: Int
+    public let status: Int
+    public let verified: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case draftID = "draft_id"
+        case id
+        case uuid
+        case name
+        case size
+        case status = "status_enum"
+        case verified
     }
 }
 

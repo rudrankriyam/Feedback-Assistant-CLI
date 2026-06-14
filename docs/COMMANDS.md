@@ -67,6 +67,7 @@ Commands:
   relato web drafts create --form-id ID [--locale LOCALE] [--team-id ID] [--compact]
   relato web drafts view --id ID [--locale LOCALE] [--compact]
   relato web drafts update --id ID [--payload PATH] [field options] [--answer TAT=VALUE]... [--locale LOCALE] [--compact]
+  relato web drafts attach --id ID [--file PATH]... [--payload PATH] [--locale LOCALE] [--compact]
 
 Help topics:
   relato help payload
@@ -88,8 +89,9 @@ Safety:
 
   `relato web` is unofficial and isolated from the stable native workflow.
   Its endpoints may change without notice. Draft creation, inspection, and
-  schema-validated answer updates are supported. Attachment upload and final
-  web submission are not yet exposed.
+  schema-validated answer updates are supported. Attachment upload uses
+  Apple's file-promise protocol and verifies the result from the draft.
+  Final web submission is not yet exposed.
 ```
 
 To regenerate:
@@ -122,6 +124,7 @@ make generate-command-docs
 - `relato web drafts create --form-id ID [--locale LOCALE] [--team-id ID] [--compact]`
 - `relato web drafts view --id ID [--locale LOCALE] [--compact]`
 - `relato web drafts update --id ID [--payload PATH] [field options] [--answer TAT=VALUE]... [--locale LOCALE] [--compact]`
+- `relato web drafts attach --id ID [--file PATH]... [--payload PATH] [--locale LOCALE] [--compact]`
 
 ## Topic Help
 
@@ -372,13 +375,22 @@ Draft commands:
     Repeat --answer TAT=VALUE for conditional or form-specific questions.
     Repeating the same TAT supplies multiple checkbox values.
 
+  relato web drafts attach --id ID [--file PATH]... [--payload PATH] [--locale LOCALE] [--compact]
+    Uploads one or more local files through Apple's file-promise sequence:
+    create, mark uploading, obtain a presigned object URL, upload raw bytes,
+    mark uploaded, and verify the persisted file promise from the draft.
+
+    Repeat --file to attach multiple files. --payload attaches the snapshot
+    path from a `relato prepare` JSON payload. Duplicate paths are uploaded once.
+    The command emits verified attachment receipts and never prints presigned URLs.
+
 Output:
   JSON is pretty-printed by default for agent inspection.
   --compact emits compact JSON.
 
 Boundaries:
-  This experiment creates, reads, and edits drafts. It does not yet upload
-  attachments or submit feedback. The stable native workflow is unchanged.
+  This experiment creates, reads, edits, and attaches files to drafts. It does
+  not yet submit feedback. The stable native workflow is unchanged.
 ```
 
 ## Scripting Tips

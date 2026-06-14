@@ -226,7 +226,9 @@ enum RelatoCLI {
     static func runWebDrafts(_ rawArguments: [String]) async throws {
         var arguments = rawArguments
         guard !arguments.isEmpty else {
-            throw RelatoError.invalidArgument("web drafts requires a subcommand: create, view, update")
+            throw RelatoError.invalidArgument(
+                "web drafts requires a subcommand: create, view, update, attach"
+            )
         }
 
         let subcommand = arguments.removeFirst()
@@ -282,6 +284,45 @@ enum RelatoCLI {
                 locale: locale,
                 answers: answers
             )
+        case "attach":
+            let id = try requireOption("--id", from: &arguments)
+            var paths = try takeOptions("--file", from: &arguments)
+            if let payloadPath = try takeOption("--payload", from: &arguments) {
+                let payload = try loadPayload(at: expandedPath(payloadPath))
+                guard let snapshot = payload.snapshot else {
+                    throw RelatoError.invalidArgument(
+                        "The payload does not contain a snapshot attachment"
+                    )
+                }
+                paths.append(snapshot)
+            }
+            try ensureNoArguments(arguments)
+            guard !paths.isEmpty else {
+                throw RelatoError.invalidArgument(
+                    "web drafts attach requires --file PATH or --payload PATH"
+                )
+            }
+
+            let client = try makeFeedbackWebClient()
+            var seenPaths: Set<String> = []
+            var receipts: [FeedbackWebAttachmentReceipt] = []
+            for path in paths {
+                let fileURL = URL(
+                    fileURLWithPath: expandedPath(path)
+                ).standardizedFileURL
+                guard seenPaths.insert(fileURL.path).inserted else {
+                    continue
+                }
+                receipts.append(
+                    try await client.uploadAttachment(
+                        draftID: id,
+                        fileURL: fileURL,
+                        locale: locale
+                    )
+                )
+            }
+            try printJSON(receipts, pretty: !compact)
+            return
         default:
             throw RelatoError.invalidArgument("Unknown web drafts subcommand: \(subcommand)")
         }
@@ -990,6 +1031,7 @@ enum RelatoCLI {
               relato web drafts create --form-id ID [--locale LOCALE] [--team-id ID] [--compact]
               relato web drafts view --id ID [--locale LOCALE] [--compact]
               relato web drafts update --id ID [--payload PATH] [field options] [--answer TAT=VALUE]... [--locale LOCALE] [--compact]
+              relato web drafts attach --id ID [--file PATH]... [--payload PATH] [--locale LOCALE] [--compact]
 
             Help topics:
               relato help payload
@@ -1011,8 +1053,9 @@ enum RelatoCLI {
 
               `relato web` is unofficial and isolated from the stable native workflow.
               Its endpoints may change without notice. Draft creation, inspection, and
-              schema-validated answer updates are supported. Attachment upload and final
-              web submission are not yet exposed.
+              schema-validated answer updates are supported. Attachment upload uses
+              Apple's file-promise protocol and verifies the result from the draft.
+              Final web submission is not yet exposed.
             """
         )
     }
@@ -1230,13 +1273,22 @@ enum RelatoCLI {
                 Repeat --answer TAT=VALUE for conditional or form-specific questions.
                 Repeating the same TAT supplies multiple checkbox values.
 
+              relato web drafts attach --id ID [--file PATH]... [--payload PATH] [--locale LOCALE] [--compact]
+                Uploads one or more local files through Apple's file-promise sequence:
+                create, mark uploading, obtain a presigned object URL, upload raw bytes,
+                mark uploaded, and verify the persisted file promise from the draft.
+
+                Repeat --file to attach multiple files. --payload attaches the snapshot
+                path from a `relato prepare` JSON payload. Duplicate paths are uploaded once.
+                The command emits verified attachment receipts and never prints presigned URLs.
+
             Output:
               JSON is pretty-printed by default for agent inspection.
               --compact emits compact JSON.
 
             Boundaries:
-              This experiment creates, reads, and edits drafts. It does not yet upload
-              attachments or submit feedback. The stable native workflow is unchanged.
+              This experiment creates, reads, edits, and attaches files to drafts. It does
+              not yet submit feedback. The stable native workflow is unchanged.
             """
         )
     }

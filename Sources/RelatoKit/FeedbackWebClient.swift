@@ -159,6 +159,110 @@ public actor FeedbackWebClient {
         )
     }
 
+    public func uploadAttachment(
+        draftID: String,
+        fileURL: URL,
+        locale: String = "en"
+    ) async throws -> FeedbackWebAttachmentReceipt {
+        let draftIDValue = try numericID(draftID, name: "draft id")
+        let fileURL = fileURL.standardizedFileURL
+        let resourceValues = try fileURL.resourceValues(
+            forKeys: [.fileSizeKey, .isRegularFileKey]
+        )
+        guard resourceValues.isRegularFile == true else {
+            throw RelatoError.missingFile(fileURL.path)
+        }
+        guard let fileSize = resourceValues.fileSize, fileSize > 0 else {
+            throw RelatoError.invalidArgument("Attachment must be a non-empty regular file")
+        }
+        let fileName = fileURL.lastPathComponent
+        guard !fileName.isEmpty else {
+            throw RelatoError.invalidArgument("Attachment filename cannot be empty")
+        }
+
+        var promiseUUID: String?
+        do {
+            let createBody = try JSONEncoder().encode(
+                FeedbackWebCreateFilePromisePayload(
+                    parentType: "FormResponse",
+                    parentID: draftIDValue
+                )
+            )
+            let createData = try await request(
+                method: "POST",
+                path: "feedback/file_promise/new",
+                locale: locale,
+                body: createBody
+            )
+            let created = try decodeWebResponse(
+                FeedbackWebCreateFilePromiseResponse.self,
+                from: createData,
+                name: "file promise"
+            )
+            guard !created.uuid.isEmpty else {
+                throw RelatoError.web("Apple returned an empty file promise UUID")
+            }
+            promiseUUID = created.uuid
+
+            try await updateFilePromise(
+                uuid: created.uuid,
+                status: "uploading",
+                name: fileName,
+                size: fileSize,
+                locale: locale
+            )
+            let linkData = try await request(
+                method: "GET",
+                path:
+                    "feedback/file_promise/\(try pathSegment(created.uuid, name: "file promise UUID"))/upload_link",
+                locale: locale
+            )
+            let link = try decodeWebResponse(
+                FeedbackWebUploadLinkResponse.self,
+                from: linkData,
+                name: "attachment upload link"
+            )
+            let uploadURL = try validatedUploadURL(link.presignedURL)
+            try await uploadFile(at: fileURL, to: uploadURL)
+            try await updateFilePromise(
+                uuid: created.uuid,
+                status: "uploaded",
+                name: fileName,
+                size: fileSize,
+                locale: locale
+            )
+        } catch {
+            if let promiseUUID {
+                try? await updateFilePromise(
+                    uuid: promiseUUID,
+                    status: "upload_error",
+                    name: fileName,
+                    size: fileSize,
+                    locale: locale
+                )
+            }
+            throw error
+        }
+
+        guard let uuid = promiseUUID else {
+            throw RelatoError.web("Apple did not create a file promise")
+        }
+        let promise = try await verifyAttachment(
+            draftID: draftID,
+            uuid: uuid,
+            locale: locale
+        )
+        return FeedbackWebAttachmentReceipt(
+            draftID: draftIDValue,
+            id: promise.id,
+            uuid: promise.uuid,
+            name: promise.name,
+            size: promise.size,
+            status: promise.status,
+            verified: true
+        )
+    }
+
     public func currentSession() -> FeedbackWebSession {
         session
     }
@@ -237,6 +341,102 @@ public actor FeedbackWebClient {
         }
     }
 
+    private func updateFilePromise(
+        uuid: String,
+        status: String,
+        name: String,
+        size: Int,
+        locale: String
+    ) async throws {
+        let uuid = try pathSegment(uuid, name: "file promise UUID")
+        let body = try JSONEncoder().encode(
+            FeedbackWebFilePromiseStatusPayload(
+                status: status,
+                options: FeedbackWebFilePromiseOptions(name: name, size: size)
+            )
+        )
+        _ = try await request(
+            method: "PUT",
+            path: "feedback/file_promise/\(uuid)",
+            locale: locale,
+            body: body
+        )
+    }
+
+    private func uploadFile(at fileURL: URL, to uploadURL: URL) async throws {
+        var request = URLRequest(url: uploadURL)
+        request.httpMethod = "PUT"
+        request.timeoutInterval = 30 * 60
+        request.setValue(
+            "application/x-www-form-urlencoded",
+            forHTTPHeaderField: "Content-Type"
+        )
+
+        let (_, response) = try await urlSession.upload(for: request, fromFile: fileURL)
+        guard let response = response as? HTTPURLResponse else {
+            throw FeedbackWebClientError.invalidResponse
+        }
+        guard (200..<300).contains(response.statusCode) else {
+            throw FeedbackWebClientError.requestFailed(
+                status: response.statusCode,
+                path: "attachment object upload"
+            )
+        }
+    }
+
+    private func verifyAttachment(
+        draftID: String,
+        uuid: String,
+        locale: String
+    ) async throws -> FeedbackWebFilePromise {
+        for attempt in 0..<5 {
+            if attempt > 0 {
+                try await Task.sleep(nanoseconds: 250_000_000)
+            }
+            let data = try await draft(id: draftID, locale: locale)
+            let draft = try decodeWebResponse(
+                FeedbackWebDraft.self,
+                from: data,
+                name: "draft attachment verification"
+            )
+            if let promise = draft.filePromises.first(where: {
+                $0.uuid.caseInsensitiveCompare(uuid) == .orderedSame
+                    && $0.status == 40
+            }) {
+                return promise
+            }
+        }
+        throw RelatoError.web(
+            "attachment upload completed, but Apple did not return an uploaded file promise"
+        )
+    }
+
+    private func validatedUploadURL(_ value: String) throws -> URL {
+        guard
+            let components = URLComponents(string: value),
+            components.scheme?.lowercased() == "https",
+            components.host != nil,
+            components.user == nil,
+            components.password == nil,
+            let url = components.url
+        else {
+            throw RelatoError.web("Apple returned an invalid attachment upload URL")
+        }
+        return url
+    }
+
+    private func decodeWebResponse<T: Decodable>(
+        _ type: T.Type,
+        from data: Data,
+        name: String
+    ) throws -> T {
+        do {
+            return try JSONDecoder().decode(type, from: data)
+        } catch {
+            throw RelatoError.web("Apple returned a malformed \(name) response")
+        }
+    }
+
     private func path(
         _ basePath: String,
         queryName: String,
@@ -268,6 +468,14 @@ public actor FeedbackWebClient {
         return encoded
     }
 
+    private func numericID(_ value: String, name: String) throws -> Int {
+        let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let id = Int(value), id > 0 else {
+            throw RelatoError.invalidArgument("\(name) must be a positive integer")
+        }
+        return id
+    }
+
     private func validatedLocale(_ locale: String) throws -> String {
         let locale = locale.trimmingCharacters(in: .whitespacesAndNewlines)
         guard
@@ -284,4 +492,36 @@ public actor FeedbackWebClient {
 
 private struct FeedbackWebAnswersPayload: Encodable {
     let answers: [FeedbackWebAnswerMutation]
+}
+
+private struct FeedbackWebCreateFilePromisePayload: Encodable {
+    let parentType: String
+    let parentID: Int
+
+    enum CodingKeys: String, CodingKey {
+        case parentType = "parent_type"
+        case parentID = "parent_id"
+    }
+}
+
+private struct FeedbackWebCreateFilePromiseResponse: Decodable {
+    let uuid: String
+}
+
+private struct FeedbackWebFilePromiseOptions: Encodable {
+    let name: String
+    let size: Int
+}
+
+private struct FeedbackWebFilePromiseStatusPayload: Encodable {
+    let status: String
+    let options: FeedbackWebFilePromiseOptions
+}
+
+private struct FeedbackWebUploadLinkResponse: Decodable {
+    let presignedURL: String
+
+    enum CodingKeys: String, CodingKey {
+        case presignedURL = "presigned_url"
+    }
 }

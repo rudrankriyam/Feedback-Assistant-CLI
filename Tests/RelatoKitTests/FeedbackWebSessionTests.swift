@@ -368,6 +368,217 @@ struct FeedbackWebClientTests {
         #expect(answers[1]["values"] == nil)
         #expect(answers[1]["ignore_required"] as? Bool == true)
     }
+
+    @Test func uploadsAndVerifiesDraftAttachment() async throws {
+        defer {
+            FeedbackWebMockURLProtocol.handler = nil
+            FeedbackWebMockURLProtocol.lastRequest = nil
+            FeedbackWebMockURLProtocol.lastRequestBody = nil
+            FeedbackWebMockURLProtocol.requests = []
+            FeedbackWebMockURLProtocol.requestBodies = []
+        }
+
+        FeedbackWebMockURLProtocol.requests = []
+        FeedbackWebMockURLProtocol.requestBodies = []
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [FeedbackWebMockURLProtocol.self]
+        FeedbackWebMockURLProtocol.handler = { request in
+            let url = try #require(request.url)
+            let responseBody: Data
+            let status: Int
+
+            switch (request.httpMethod, url.host, url.path) {
+            case ("POST"?, "appleseed.apple.com", "/sp/feedback/file_promise/new"):
+                status = 201
+                responseBody = Data(#"{"uuid":"BE25C106-A40B-4C79-B94E-B9BC8BD46640"}"#.utf8)
+            case ("PUT"?, "appleseed.apple.com", let path)
+                where path == "/sp/feedback/file_promise/BE25C106-A40B-4C79-B94E-B9BC8BD46640":
+                status = 200
+                responseBody = Data(#"{"ok":true}"#.utf8)
+            case ("GET"?, "appleseed.apple.com", let path)
+                where path == "/sp/feedback/file_promise/BE25C106-A40B-4C79-B94E-B9BC8BD46640/upload_link":
+                status = 200
+                responseBody = Data(
+                    #"{"presigned_url":"https://uploads.example.test/object"}"#.utf8
+                )
+            case ("PUT"?, "uploads.example.test", "/object"):
+                status = 200
+                responseBody = Data()
+            case ("GET"?, "appleseed.apple.com", "/sp/en/feedback/form_responses/104688952"):
+                status = 200
+                responseBody = Data(
+                    #"""
+                    {
+                      "id": 104688952,
+                      "form_id": 4167,
+                      "answers": [],
+                      "file_promises": [
+                        {
+                          "id": 60604757,
+                          "uuid": "BE25C106-A40B-4C79-B94E-B9BC8BD46640",
+                          "name": "evidence.md",
+                          "size": 17,
+                          "status_enum": 40
+                        }
+                      ]
+                    }
+                    """#.utf8
+                )
+            default:
+                throw RelatoError.web(
+                    "unexpected mock attachment request: \(request.httpMethod ?? "") \(url)"
+                )
+            }
+
+            let response = HTTPURLResponse(
+                url: url,
+                statusCode: status,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            return (response, responseBody)
+        }
+
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("evidence.md")
+        try Data("attachment bytes\n".utf8).write(to: fileURL)
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+
+        let client = FeedbackWebClient(
+            session: FeedbackWebSession(cookies: [
+                FeedbackWebCookie(
+                    name: "SP-XSRF-TOKEN",
+                    value: "csrf",
+                    domain: "appleseed.apple.com",
+                    path: "/sp/"
+                ),
+                FeedbackWebCookie(
+                    name: "session",
+                    value: "secret",
+                    domain: ".apple.com"
+                ),
+            ]),
+            configuration: configuration
+        )
+        let receipt = try await client.uploadAttachment(
+            draftID: "104688952",
+            fileURL: fileURL
+        )
+
+        #expect(receipt.draftID == 104688952)
+        #expect(receipt.id == 60604757)
+        #expect(receipt.name == "evidence.md")
+        #expect(receipt.size == 17)
+        #expect(receipt.status == 40)
+        #expect(receipt.verified)
+
+        let requests = FeedbackWebMockURLProtocol.requests
+        #expect(requests.map(\.httpMethod) == ["POST", "PUT", "GET", "PUT", "PUT", "GET"])
+        #expect(requests[0].url?.path == "/sp/feedback/file_promise/new")
+        #expect(requests[2].url?.path.hasSuffix("/upload_link") == true)
+        #expect(requests[3].url?.host == "uploads.example.test")
+        #expect(requests[5].url?.path == "/sp/en/feedback/form_responses/104688952")
+        #expect(requests[3].value(forHTTPHeaderField: "Cookie") == nil)
+        #expect(requests[3].value(forHTTPHeaderField: "X-CSRF-TOKEN") == nil)
+        #expect(requests[3].value(forHTTPHeaderField: "X-SP-API") == nil)
+        #expect(
+            requests[3].value(forHTTPHeaderField: "Content-Type")
+                == "application/x-www-form-urlencoded"
+        )
+
+        let statusBodies = [1, 4].compactMap {
+            FeedbackWebMockURLProtocol.requestBodies[$0]
+        }.compactMap {
+            try? JSONSerialization.jsonObject(with: $0) as? [String: Any]
+        }
+        #expect(statusBodies.compactMap { $0["status"] as? String } == ["uploading", "uploaded"])
+    }
+
+    @Test func marksFilePromiseErroredWhenObjectUploadFails() async throws {
+        defer {
+            FeedbackWebMockURLProtocol.handler = nil
+            FeedbackWebMockURLProtocol.lastRequest = nil
+            FeedbackWebMockURLProtocol.lastRequestBody = nil
+            FeedbackWebMockURLProtocol.requests = []
+            FeedbackWebMockURLProtocol.requestBodies = []
+        }
+
+        FeedbackWebMockURLProtocol.requests = []
+        FeedbackWebMockURLProtocol.requestBodies = []
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [FeedbackWebMockURLProtocol.self]
+        FeedbackWebMockURLProtocol.handler = { request in
+            let url = try #require(request.url)
+            let status: Int
+            let responseBody: Data
+
+            switch (request.httpMethod, url.host, url.path) {
+            case ("POST"?, "appleseed.apple.com", "/sp/feedback/file_promise/new"):
+                status = 201
+                responseBody = Data(#"{"uuid":"FAILED-UPLOAD"}"#.utf8)
+            case ("PUT"?, "appleseed.apple.com", "/sp/feedback/file_promise/FAILED-UPLOAD"):
+                status = 200
+                responseBody = Data(#"{"ok":true}"#.utf8)
+            case ("GET"?, "appleseed.apple.com", "/sp/feedback/file_promise/FAILED-UPLOAD/upload_link"):
+                status = 200
+                responseBody = Data(
+                    #"{"presigned_url":"https://uploads.example.test/failure"}"#.utf8
+                )
+            case ("PUT"?, "uploads.example.test", "/failure"):
+                status = 500
+                responseBody = Data()
+            default:
+                throw RelatoError.web(
+                    "unexpected mock failed-upload request: \(request.httpMethod ?? "") \(url)"
+                )
+            }
+
+            let response = HTTPURLResponse(
+                url: url,
+                statusCode: status,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            return (response, responseBody)
+        }
+
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("failed-upload.txt")
+        try Data("test".utf8).write(to: fileURL)
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+
+        let client = FeedbackWebClient(
+            session: FeedbackWebSession(cookies: []),
+            configuration: configuration
+        )
+        await #expect(
+            throws: FeedbackWebClientError.requestFailed(
+                status: 500,
+                path: "attachment object upload"
+            )
+        ) {
+            try await client.uploadAttachment(
+                draftID: "104688952",
+                fileURL: fileURL
+            )
+        }
+
+        let statusBodies: [[String: Any]] =
+            FeedbackWebMockURLProtocol.requestBodies.compactMap { body in
+                guard
+                    let body,
+                    let object = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
+                    object["status"] != nil
+                else {
+                    return nil
+                }
+                return object
+            }
+        #expect(
+            statusBodies.compactMap { $0["status"] as? String }
+                == ["uploading", "upload_error"]
+        )
+    }
 }
 
 private final class FeedbackWebMockURLProtocol: URLProtocol, @unchecked Sendable {
@@ -375,6 +586,8 @@ private final class FeedbackWebMockURLProtocol: URLProtocol, @unchecked Sendable
         ((URLRequest) throws -> (HTTPURLResponse, Data))?
     nonisolated(unsafe) static var lastRequest: URLRequest?
     nonisolated(unsafe) static var lastRequestBody: Data?
+    nonisolated(unsafe) static var requests: [URLRequest] = []
+    nonisolated(unsafe) static var requestBodies: [Data?] = []
 
     override class func canInit(with request: URLRequest) -> Bool {
         true
@@ -387,6 +600,8 @@ private final class FeedbackWebMockURLProtocol: URLProtocol, @unchecked Sendable
     override func startLoading() {
         Self.lastRequest = request
         Self.lastRequestBody = Self.bodyData(from: request)
+        Self.requests.append(request)
+        Self.requestBodies.append(Self.lastRequestBody)
         do {
             guard let handler = Self.handler else {
                 throw RelatoError.web("missing mock URL handler")
