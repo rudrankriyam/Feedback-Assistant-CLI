@@ -80,6 +80,25 @@ import Testing
     #expect(configuration.widgetKey == "dynamic-widget-key")
 }
 
+@Test func webClientsDoNotMutateCallerSessionConfigurations() {
+    let clientConfiguration = URLSessionConfiguration.ephemeral
+    clientConfiguration.httpShouldSetCookies = true
+    clientConfiguration.requestCachePolicy = .returnCacheDataElseLoad
+    _ = FeedbackWebClient(
+        session: FeedbackWebSession(cookies: []),
+        configuration: clientConfiguration
+    )
+    #expect(clientConfiguration.httpShouldSetCookies)
+    #expect(clientConfiguration.requestCachePolicy == .returnCacheDataElseLoad)
+
+    let authenticationConfiguration = URLSessionConfiguration.ephemeral
+    authenticationConfiguration.httpShouldSetCookies = true
+    authenticationConfiguration.requestCachePolicy = .returnCacheDataElseLoad
+    _ = FeedbackWebAuthenticator(configuration: authenticationConfiguration)
+    #expect(authenticationConfiguration.httpShouldSetCookies)
+    #expect(authenticationConfiguration.requestCachePolicy == .returnCacheDataElseLoad)
+}
+
 @Suite(.serialized)
 struct FeedbackWebAuthenticationFlowTests {
     @Test func performsHeadlessSRPAndBootstrapsAppleseed() async throws {
@@ -162,7 +181,7 @@ struct FeedbackWebAuthenticationFlowTests {
         )
     }
 
-    @Test func discardsCachedCookiesFromAnotherAccount() async throws {
+    @Test func discardsCachedCookiesBeforeReauthentication() async throws {
         defer { FeedbackWebAuthenticationMockURLProtocol.handler = nil }
         var requests: [URLRequest] = []
         FeedbackWebAuthenticationMockURLProtocol.handler = { request in
@@ -211,7 +230,7 @@ struct FeedbackWebAuthenticationFlowTests {
                 )
             ],
             accountIdentifierHash: FeedbackWebSession.identifierHash(
-                for: "other@example.com"
+                for: "user@example.com"
             )
         )
         let authenticator = FeedbackWebAuthenticator(
@@ -426,6 +445,302 @@ struct FeedbackWebAuthenticationFlowTests {
         #expect(
             session.cookies.first(where: { $0.name == "SP-XSRF-TOKEN" })?.value
                 == "csrf-token"
+        )
+    }
+
+    @Test func rotatesContinuationHeadersDuringTrustedDeviceFallback() async throws {
+        defer { FeedbackWebAuthenticationMockURLProtocol.handler = nil }
+        var requests: [URLRequest] = []
+        FeedbackWebAuthenticationMockURLProtocol.handler = { request in
+            requests.append(request)
+            switch requests.count {
+            case 1:
+                return response(
+                    request,
+                    status: 200,
+                    body: loginHTML(widgetKey: "widget-key")
+                )
+            case 2:
+                return response(
+                    request,
+                    status: 200,
+                    body:
+                        #"{"iteration":1,"salt":"Cg==","protocol":"s2k","b":"Ag==","c":"challenge"}"#
+                )
+            case 3:
+                return response(request, status: 200, body: "")
+            case 4:
+                return response(
+                    request,
+                    status: 409,
+                    headers: [
+                        "X-Apple-ID-Session-Id": "session-initial",
+                        "scnt": "scnt-initial",
+                    ],
+                    body: "{}"
+                )
+            case 5:
+                #expect(
+                    request.value(forHTTPHeaderField: "X-Apple-ID-Session-Id")
+                        == "session-initial"
+                )
+                #expect(request.value(forHTTPHeaderField: "scnt") == "scnt-initial")
+                return response(
+                    request,
+                    status: 200,
+                    headers: [
+                        "X-Apple-ID-Session-Id": "session-options",
+                        "scnt": "scnt-options",
+                    ],
+                    body:
+                        #"{"noTrustedDevices":false,"trustedPhoneNumbers":[{"id":42,"pushMode":"sms","numberWithDialCode":"••• ••67"}]}"#
+                )
+            case 6:
+                #expect(
+                    request.value(forHTTPHeaderField: "X-Apple-ID-Session-Id")
+                        == "session-options"
+                )
+                #expect(request.value(forHTTPHeaderField: "scnt") == "scnt-options")
+                return response(
+                    request,
+                    status: 400,
+                    headers: [
+                        "X-Apple-ID-Session-Id": "session-trusted",
+                        "scnt": "scnt-trusted",
+                    ],
+                    body: #"{"serviceErrors":[{"code":"-21669"}]}"#
+                )
+            case 7:
+                #expect(request.url?.path == "/appleauth/auth/verify/phone")
+                #expect(
+                    request.value(forHTTPHeaderField: "X-Apple-ID-Session-Id")
+                        == "session-trusted"
+                )
+                #expect(request.value(forHTTPHeaderField: "scnt") == "scnt-trusted")
+                return response(
+                    request,
+                    status: 200,
+                    headers: [
+                        "X-Apple-ID-Session-Id": "session-delivery",
+                        "scnt": "scnt-delivery",
+                    ],
+                    body: "{}"
+                )
+            case 8:
+                #expect(request.url?.path == "/appleauth/auth/verify/phone/securitycode")
+                #expect(
+                    request.value(forHTTPHeaderField: "X-Apple-ID-Session-Id")
+                        == "session-delivery"
+                )
+                #expect(request.value(forHTTPHeaderField: "scnt") == "scnt-delivery")
+                return response(
+                    request,
+                    status: 200,
+                    headers: [
+                        "X-Apple-ID-Session-Id": "session-phone",
+                        "scnt": "scnt-phone",
+                    ],
+                    body: "{}"
+                )
+            case 9:
+                #expect(request.url?.path == "/appleauth/auth/2sv/trust")
+                #expect(
+                    request.value(forHTTPHeaderField: "X-Apple-ID-Session-Id")
+                        == "session-phone"
+                )
+                #expect(request.value(forHTTPHeaderField: "scnt") == "scnt-phone")
+                return response(
+                    request,
+                    status: 200,
+                    headers: [
+                        "Set-Cookie":
+                            "myacinfo=fallback-session; Domain=.apple.com; Path=/; Secure; HttpOnly"
+                    ],
+                    body: "{}"
+                )
+            case 10:
+                return response(
+                    request,
+                    status: 200,
+                    headers: [
+                        "Set-Cookie":
+                            "SP-XSRF-TOKEN=csrf-token; Domain=appleseed.apple.com; Path=/sp/; Secure"
+                    ],
+                    body: #"{"participant":{"id":"1"}}"#
+                )
+            default:
+                throw RelatoError.web("unexpected request \(requests.count)")
+            }
+        }
+
+        let recorder = ChallengeRecorder()
+        let authenticator = FeedbackWebAuthenticator(
+            configuration: mockConfiguration()
+        )
+        let session = try await authenticator.login(
+            appleID: "user@example.com",
+            password: "example"
+        ) { challenge in
+            await recorder.record(challenge)
+            return "123456"
+        }
+
+        #expect(requests.count == 10)
+        #expect(
+            await recorder.challenges
+                == [
+                    FeedbackWebTwoFactorChallenge(
+                        method: .trustedDevice,
+                        destination: "••• ••67"
+                    ),
+                    FeedbackWebTwoFactorChallenge(
+                        method: .phone,
+                        destination: "••• ••67",
+                        codeWasRequested: true
+                    ),
+                ]
+        )
+        #expect(
+            session.cookies.first(where: { $0.name == "SP-XSRF-TOKEN" })?.value
+                == "csrf-token"
+        )
+    }
+
+    @Test func trustedDeviceServerErrorDoesNotTriggerPhoneFallback() async throws {
+        defer { FeedbackWebAuthenticationMockURLProtocol.handler = nil }
+        var requests: [URLRequest] = []
+        FeedbackWebAuthenticationMockURLProtocol.handler = { request in
+            requests.append(request)
+            switch requests.count {
+            case 1:
+                return response(
+                    request,
+                    status: 200,
+                    body: loginHTML(widgetKey: "widget-key")
+                )
+            case 2:
+                return response(
+                    request,
+                    status: 200,
+                    body:
+                        #"{"iteration":1,"salt":"Cg==","protocol":"s2k","b":"Ag==","c":"challenge"}"#
+                )
+            case 3:
+                return response(request, status: 200, body: "")
+            case 4:
+                return response(
+                    request,
+                    status: 409,
+                    headers: [
+                        "X-Apple-ID-Session-Id": "apple-session-id",
+                        "scnt": "scnt-token",
+                    ],
+                    body: "{}"
+                )
+            case 5:
+                return response(
+                    request,
+                    status: 200,
+                    body:
+                        #"{"noTrustedDevices":false,"trustedPhoneNumbers":[{"id":42,"pushMode":"sms","numberWithDialCode":"••• ••67"}]}"#
+                )
+            case 6:
+                return response(request, status: 500, body: "{}")
+            default:
+                throw RelatoError.web("unexpected fallback request \(requests.count)")
+            }
+        }
+
+        let authenticator = FeedbackWebAuthenticator(
+            configuration: mockConfiguration()
+        )
+        await #expect(
+            throws: FeedbackWebAuthenticationError.requestFailed(
+                stage: "trusted-device verification",
+                status: 500
+            )
+        ) {
+            try await authenticator.login(
+                appleID: "user@example.com",
+                password: "example"
+            ) { _ in
+                "123456"
+            }
+        }
+        #expect(requests.count == 6)
+        #expect(
+            requests.last?.url?.path
+                == "/appleauth/auth/verify/trusteddevice/securitycode"
+        )
+    }
+
+    @Test func phoneRateLimitIsReportedAsARequestFailure() async throws {
+        defer { FeedbackWebAuthenticationMockURLProtocol.handler = nil }
+        var requests: [URLRequest] = []
+        FeedbackWebAuthenticationMockURLProtocol.handler = { request in
+            requests.append(request)
+            switch requests.count {
+            case 1:
+                return response(
+                    request,
+                    status: 200,
+                    body: loginHTML(widgetKey: "widget-key")
+                )
+            case 2:
+                return response(
+                    request,
+                    status: 200,
+                    body:
+                        #"{"iteration":1,"salt":"Cg==","protocol":"s2k","b":"Ag==","c":"challenge"}"#
+                )
+            case 3:
+                return response(request, status: 200, body: "")
+            case 4:
+                return response(
+                    request,
+                    status: 409,
+                    headers: [
+                        "X-Apple-ID-Session-Id": "apple-session-id",
+                        "scnt": "scnt-token",
+                    ],
+                    body: "{}"
+                )
+            case 5:
+                return response(
+                    request,
+                    status: 200,
+                    body:
+                        #"{"noTrustedDevices":true,"trustedPhoneNumbers":[{"id":42,"pushMode":"sms","numberWithDialCode":"••• ••67"}]}"#
+                )
+            case 6:
+                return response(request, status: 200, body: "{}")
+            case 7:
+                return response(request, status: 429, body: "{}")
+            default:
+                throw RelatoError.web("unexpected phone request \(requests.count)")
+            }
+        }
+
+        let authenticator = FeedbackWebAuthenticator(
+            configuration: mockConfiguration()
+        )
+        await #expect(
+            throws: FeedbackWebAuthenticationError.requestFailed(
+                stage: "phone verification",
+                status: 429
+            )
+        ) {
+            try await authenticator.login(
+                appleID: "user@example.com",
+                password: "example"
+            ) { _ in
+                "123456"
+            }
+        }
+        #expect(requests.count == 7)
+        #expect(
+            requests.last?.url?.path
+                == "/appleauth/auth/verify/phone/securitycode"
         )
     }
 }

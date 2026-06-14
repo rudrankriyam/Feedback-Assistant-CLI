@@ -59,9 +59,10 @@ public enum FeedbackWebSubmissionValidator {
         }
 
         let uploadedAttachmentCount = draft.filePromises.filter { $0.status == 40 }.count
-        let answersByQuestionID = Dictionary(
-            uniqueKeysWithValues: draft.answers.map { ($0.questionID, $0) }
-        )
+        var answersByQuestionID: [Int: FeedbackWebDraftAnswer] = [:]
+        for answer in draft.answers {
+            answersByQuestionID[answer.questionID] = answer
+        }
         let missingRequiredFields = visibleQuestions(draft: draft, form: form).compactMap {
             question -> FeedbackWebSubmissionField? in
             guard question.isRequired else {
@@ -70,7 +71,9 @@ public enum FeedbackWebSubmissionValidator {
 
             let tat = FeedbackWebFormSchema.normalizedTAT(question.tat)
             let isSatisfied: Bool
-            if tat == ":required_file_zone" {
+            if answersByQuestionID[question.id]?.ignoreRequired == true {
+                isSatisfied = true
+            } else if tat == ":required_file_zone" {
                 isSatisfied = uploadedAttachmentCount > 0
             } else if let answer = answersByQuestionID[question.id] {
                 isSatisfied =
@@ -255,6 +258,13 @@ struct FeedbackWebMutationResponse: Decodable {
 struct FeedbackWebMutationItems: Decodable {
     let upsert: [FeedbackWebMutationRecord]
 
+    var feedbackID: Int? {
+        upsert.first {
+            $0.id > 0
+                && $0.type?.caseInsensitiveCompare("FEEDBACK") == .orderedSame
+        }?.id
+    }
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         upsert =
@@ -299,8 +309,11 @@ private enum FeedbackWebConditionEvaluator {
         _ expression: Any,
         answersByTAT: [String: String]
     ) -> Bool {
-        guard let values = expression as? [Any], !values.isEmpty else {
+        guard let values = expression as? [Any] else {
             return false
+        }
+        guard !values.isEmpty else {
+            return true
         }
         if values.count == 1 {
             return operand(values[0], answersByTAT: answersByTAT).booleanValue

@@ -55,13 +55,13 @@ public actor FeedbackWebClient {
         sessionStore: FeedbackWebSessionStore? = nil,
         configuration: URLSessionConfiguration = .ephemeral
     ) {
-        let configuration = configuration
-        configuration.httpShouldSetCookies = false
-        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        let isolatedConfiguration = configuration.copy() as! URLSessionConfiguration
+        isolatedConfiguration.httpShouldSetCookies = false
+        isolatedConfiguration.requestCachePolicy = .reloadIgnoringLocalCacheData
         self.session = session
         self.sessionStore = sessionStore
         self.urlSession = URLSession(
-            configuration: configuration,
+            configuration: isolatedConfiguration,
             delegate: FeedbackWebRedirectDelegate(),
             delegateQueue: nil
         )
@@ -234,13 +234,7 @@ public actor FeedbackWebClient {
             from: responseData,
             name: "submission"
         )
-        let records = response.items.upsert.filter { $0.id > 0 }
-        let feedbackID =
-            records.first(where: {
-                $0.type?.caseInsensitiveCompare("FEEDBACK") == .orderedSame
-            })?.id
-            ?? (records.count == 1 ? records[0].id : nil)
-        guard let feedbackID else {
+        guard let feedbackID = response.items.feedbackID else {
             throw RelatoError.web("Apple did not return a feedback ID after submission")
         }
 
@@ -424,15 +418,6 @@ public actor FeedbackWebClient {
             throw FeedbackWebClientError.invalidResponse
         }
 
-        let responseCookies = HTTPCookie.cookies(
-            withResponseHeaderFields: responseHeaderFields(response),
-            for: url
-        )
-        if !responseCookies.isEmpty {
-            session.merge(responseCookies)
-            try sessionStore?.save(session)
-        }
-
         let responseHost = response.url?.host?.lowercased()
         if response.statusCode == 401
             || response.statusCode == 403
@@ -443,6 +428,15 @@ public actor FeedbackWebClient {
         }
         guard (200..<300).contains(response.statusCode) else {
             throw FeedbackWebClientError.requestFailed(status: response.statusCode, path: path)
+        }
+
+        let responseCookies = HTTPCookie.cookies(
+            withResponseHeaderFields: responseHeaderFields(response),
+            for: url
+        )
+        if !responseCookies.isEmpty {
+            session.merge(responseCookies)
+            try sessionStore?.save(session)
         }
         return data
     }

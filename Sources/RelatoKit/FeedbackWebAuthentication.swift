@@ -22,7 +22,7 @@ public struct FeedbackWebTwoFactorChallenge: Equatable, Sendable {
     }
 }
 
-public enum FeedbackWebAuthenticationError: Error, CustomStringConvertible {
+public enum FeedbackWebAuthenticationError: Error, CustomStringConvertible, Equatable {
     case invalidCredentials
     case accountActionRequired
     case malformedLoginConfiguration
@@ -68,12 +68,12 @@ public actor FeedbackWebAuthenticator {
         session: FeedbackWebSession = FeedbackWebSession(cookies: []),
         configuration: URLSessionConfiguration = .ephemeral
     ) {
-        let configuration = configuration
-        configuration.httpShouldSetCookies = false
-        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        let isolatedConfiguration = configuration.copy() as! URLSessionConfiguration
+        isolatedConfiguration.httpShouldSetCookies = false
+        isolatedConfiguration.requestCachePolicy = .reloadIgnoringLocalCacheData
         self.session = session
         self.urlSession = URLSession(
-            configuration: configuration,
+            configuration: isolatedConfiguration,
             delegate: FeedbackWebRedirectDelegate(),
             delegateQueue: nil
         )
@@ -92,9 +92,10 @@ public actor FeedbackWebAuthenticator {
             throw RelatoError.invalidArgument("Apple Account password is required")
         }
         let accountIdentifierHash = FeedbackWebSession.identifierHash(for: appleID)
-        if !session.isEmpty, session.accountIdentifierHash != accountIdentifierHash {
-            session = FeedbackWebSession(cookies: [])
-        }
+        session = FeedbackWebSession(
+            cookies: [],
+            accountIdentifierHash: accountIdentifierHash
+        )
 
         let configuration = try await fetchLoginConfiguration()
         if let pending = try await performSRPLogin(
@@ -318,17 +319,20 @@ public actor FeedbackWebAuthenticator {
     }
 
     private func completeTwoFactor(
-        _ pending: PendingTwoFactor,
+        _ initialPending: PendingTwoFactor,
         codeProvider: TwoFactorCodeProvider
     ) async throws {
-        let options = try await authOptions(pending)
+        var pending = initialPending
+        let optionsStep = try await authOptions(pending)
+        let options = optionsStep.options
+        pending = optionsStep.pending
         let phone = options.trustedPhoneNumbers.first
 
         if options.noTrustedDevices {
             guard let phone else {
                 throw FeedbackWebAuthenticationError.noTrustedPhoneNumbers
             }
-            try await requestPhoneCode(phone, pending: pending)
+            pending = try await requestPhoneCode(phone, pending: pending)
             let code = try await resolveCode(
                 from: codeProvider,
                 challenge: FeedbackWebTwoFactorChallenge(
@@ -337,7 +341,7 @@ public actor FeedbackWebAuthenticator {
                     codeWasRequested: true
                 )
             )
-            try await submitPhoneCode(code, phone: phone, pending: pending)
+            pending = try await submitPhoneCode(code, phone: phone, pending: pending)
             try await finalizeTwoFactor(pending)
             return
         }
@@ -349,7 +353,12 @@ public actor FeedbackWebAuthenticator {
                 destination: phone?.numberWithDialCode.nilIfEmpty
             )
         )
-        if try await submitTrustedDeviceCode(trustedDeviceCode, pending: pending) {
+        let trustedDeviceStep = try await submitTrustedDeviceCode(
+            trustedDeviceCode,
+            pending: pending
+        )
+        pending = trustedDeviceStep.pending
+        if trustedDeviceStep.accepted {
             try await finalizeTwoFactor(pending)
             return
         }
@@ -357,7 +366,7 @@ public actor FeedbackWebAuthenticator {
         guard let phone else {
             throw FeedbackWebAuthenticationError.invalidTwoFactorCode
         }
-        try await requestPhoneCode(phone, pending: pending)
+        pending = try await requestPhoneCode(phone, pending: pending)
         let phoneCode = try await resolveCode(
             from: codeProvider,
             challenge: FeedbackWebTwoFactorChallenge(
@@ -366,7 +375,7 @@ public actor FeedbackWebAuthenticator {
                 codeWasRequested: true
             )
         )
-        try await submitPhoneCode(phoneCode, phone: phone, pending: pending)
+        pending = try await submitPhoneCode(phoneCode, phone: phone, pending: pending)
         try await finalizeTwoFactor(pending)
     }
 
@@ -382,13 +391,16 @@ public actor FeedbackWebAuthenticator {
         return code
     }
 
-    private func authOptions(_ pending: PendingTwoFactor) async throws -> AuthOptionsResponse {
+    private func authOptions(
+        _ pending: PendingTwoFactor
+    ) async throws -> (options: AuthOptionsResponse, pending: PendingTwoFactor) {
         let response = try await send(
             stage: "two-factor options",
             method: "GET",
             url: FeedbackWebAPI.authServiceURL,
             headers: appleSessionHeaders(pending)
         )
+        let refreshedPending = pending.refreshing(from: response.http)
         guard (200..<300).contains(response.http.statusCode) else {
             throw FeedbackWebAuthenticationError.requestFailed(
                 stage: "two-factor options",
@@ -396,7 +408,10 @@ public actor FeedbackWebAuthenticator {
             )
         }
         do {
-            return try JSONDecoder().decode(AuthOptionsResponse.self, from: response.data)
+            return (
+                try JSONDecoder().decode(AuthOptionsResponse.self, from: response.data),
+                refreshedPending
+            )
         } catch {
             throw FeedbackWebAuthenticationError.malformedLoginConfiguration
         }
@@ -405,7 +420,7 @@ public actor FeedbackWebAuthenticator {
     private func requestPhoneCode(
         _ phone: TrustedPhoneNumber,
         pending: PendingTwoFactor
-    ) async throws {
+    ) async throws -> PendingTwoFactor {
         let response = try await sendJSON(
             stage: "phone code delivery",
             method: "PUT",
@@ -416,18 +431,20 @@ public actor FeedbackWebAuthenticator {
                 mode: phone.mode
             )
         )
+        let refreshedPending = pending.refreshing(from: response.http)
         guard (200..<300).contains(response.http.statusCode) else {
             throw FeedbackWebAuthenticationError.requestFailed(
                 stage: "phone code delivery",
                 status: response.http.statusCode
             )
         }
+        return refreshedPending
     }
 
     private func submitTrustedDeviceCode(
         _ code: String,
         pending: PendingTwoFactor
-    ) async throws -> Bool {
+    ) async throws -> (accepted: Bool, pending: PendingTwoFactor) {
         let response = try await sendJSON(
             stage: "trusted-device verification",
             method: "POST",
@@ -437,14 +454,24 @@ public actor FeedbackWebAuthenticator {
             headers: appleSessionHeaders(pending),
             payload: SecurityCodeRequest(securityCode: SecurityCode(code: code))
         )
-        return (200..<300).contains(response.http.statusCode)
+        let refreshedPending = pending.refreshing(from: response.http)
+        if (200..<300).contains(response.http.statusCode) {
+            return (true, refreshedPending)
+        }
+        if response.http.statusCode == 400 {
+            return (false, refreshedPending)
+        }
+        throw FeedbackWebAuthenticationError.requestFailed(
+            stage: "trusted-device verification",
+            status: response.http.statusCode
+        )
     }
 
     private func submitPhoneCode(
         _ code: String,
         phone: TrustedPhoneNumber,
         pending: PendingTwoFactor
-    ) async throws {
+    ) async throws -> PendingTwoFactor {
         let response = try await sendJSON(
             stage: "phone verification",
             method: "POST",
@@ -458,9 +485,17 @@ public actor FeedbackWebAuthenticator {
                 mode: phone.mode
             )
         )
-        guard (200..<300).contains(response.http.statusCode) else {
+        let refreshedPending = pending.refreshing(from: response.http)
+        if response.http.statusCode == 400 {
             throw FeedbackWebAuthenticationError.invalidTwoFactorCode
         }
+        guard (200..<300).contains(response.http.statusCode) else {
+            throw FeedbackWebAuthenticationError.requestFailed(
+                stage: "phone verification",
+                status: response.http.statusCode
+            )
+        }
+        return refreshedPending
     }
 
     private func finalizeTwoFactor(_ pending: PendingTwoFactor) async throws {
@@ -685,6 +720,22 @@ private struct PendingTwoFactor: Sendable {
     let widgetKey: String
     let appleIDSessionID: String
     let scnt: String
+
+    func refreshing(from response: HTTPURLResponse) -> PendingTwoFactor {
+        let appleIDSessionID =
+            response.value(forHTTPHeaderField: "X-Apple-ID-Session-Id")?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .nilIfEmpty ?? self.appleIDSessionID
+        let scnt =
+            response.value(forHTTPHeaderField: "scnt")?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .nilIfEmpty ?? self.scnt
+        return PendingTwoFactor(
+            widgetKey: widgetKey,
+            appleIDSessionID: appleIDSessionID,
+            scnt: scnt
+        )
+    }
 }
 
 private struct LoginBootPayload: Decodable {

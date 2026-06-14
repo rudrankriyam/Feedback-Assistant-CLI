@@ -340,6 +340,66 @@ struct FeedbackWebClientTests {
         }
     }
 
+    @Test func rejectedResponsesDoNotOverwriteCachedSessionCookies() async throws {
+        defer {
+            FeedbackWebMockURLProtocol.handler = nil
+            FeedbackWebMockURLProtocol.lastRequest = nil
+            FeedbackWebMockURLProtocol.lastRequestBody = nil
+        }
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [FeedbackWebMockURLProtocol.self]
+        FeedbackWebMockURLProtocol.handler = { request in
+            let response = HTTPURLResponse(
+                url: try #require(request.url),
+                statusCode: 401,
+                httpVersion: nil,
+                headerFields: [
+                    "Set-Cookie":
+                        "SP-XSRF-TOKEN=poisoned; Domain=appleseed.apple.com; Path=/sp/; Secure"
+                ]
+            )!
+            return (response, Data())
+        }
+
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = FeedbackWebSessionStore(
+            backend: .file,
+            directoryURL: directory
+        )
+        let original = FeedbackWebSession(cookies: [
+            FeedbackWebCookie(
+                name: "SP-XSRF-TOKEN",
+                value: "original",
+                domain: "appleseed.apple.com",
+                path: "/sp/"
+            )
+        ])
+        try store.save(original)
+        let client = FeedbackWebClient(
+            session: original,
+            sessionStore: store,
+            configuration: configuration
+        )
+
+        await #expect(throws: FeedbackWebClientError.authenticationRequired) {
+            try await client.authenticate()
+        }
+        let current = await client.currentSession()
+        #expect(
+            current.cookies.first(where: { $0.name == "SP-XSRF-TOKEN" })?.value
+                == "original"
+        )
+        let loaded = try store.load()
+        let cached = try #require(loaded)
+        #expect(
+            cached.cookies.first(where: { $0.name == "SP-XSRF-TOKEN" })?.value
+                == "original"
+        )
+    }
+
     @Test func createsServerBackedDraftForForm() async throws {
         defer {
             FeedbackWebMockURLProtocol.handler = nil

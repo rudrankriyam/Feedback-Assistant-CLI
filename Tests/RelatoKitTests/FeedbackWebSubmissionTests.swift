@@ -55,6 +55,111 @@ import Testing
     #expect(preflight.missingRequiredFields.isEmpty)
 }
 
+@Test func webSubmissionPreflightHonorsIgnoredRequiredAnswers() throws {
+    let form = try JSONDecoder().decode(
+        FeedbackWebFormSchema.self,
+        from: Data(submissionFormJSON.utf8)
+    )
+    let draft = try JSONDecoder().decode(
+        FeedbackWebDraft.self,
+        from: Data(
+            #"""
+            {
+              "id": 104688952,
+              "form_id": 4167,
+              "answers": [
+                {"question_id": 366028, "values": ["Video input"]},
+                {"question_id": 366031, "values": ["Suggestion"]},
+                {"question_id": 364164, "ignore_required": true}
+              ],
+              "file_promises": []
+            }
+            """#.utf8
+        )
+    )
+
+    let preflight = try FeedbackWebSubmissionValidator.preflight(
+        draft: draft,
+        form: form
+    )
+    #expect(preflight.ready)
+    #expect(preflight.missingRequiredFields.isEmpty)
+}
+
+@Test func webSubmissionPreflightUsesLatestDuplicateAnswer() throws {
+    let form = try JSONDecoder().decode(
+        FeedbackWebFormSchema.self,
+        from: Data(submissionFormJSON.utf8)
+    )
+    let draft = try JSONDecoder().decode(
+        FeedbackWebDraft.self,
+        from: Data(
+            #"""
+            {
+              "id": 104688952,
+              "form_id": 4167,
+              "answers": [
+                {"question_id": 366028, "values": []},
+                {"question_id": 366028, "values": ["Video input"]},
+                {"question_id": 366031, "values": ["Incorrect/Unexpected Behavior"]}
+              ],
+              "file_promises": []
+            }
+            """#.utf8
+        )
+    )
+
+    let preflight = try FeedbackWebSubmissionValidator.preflight(
+        draft: draft,
+        form: form
+    )
+    #expect(preflight.ready)
+    #expect(preflight.missingRequiredFields.isEmpty)
+}
+
+@Test func webSubmissionPreflightTreatsEmptyConditionsAsVisible() throws {
+    let form = try JSONDecoder().decode(
+        FeedbackWebFormSchema.self,
+        from: Data(
+            #"""
+            {
+              "id": 4167,
+              "name": "Developer Technologies & SDKs",
+              "question_groups": [
+                {
+                  "questions": [
+                    {
+                      "id": 364164,
+                      "tat": ":required_file_zone",
+                      "text": "Attach supporting evidence",
+                      "answer_widget": "Required File Zone",
+                      "is_required": true,
+                      "is_visible_in_form": true,
+                      "conditions": "[]"
+                    }
+                  ]
+                }
+              ]
+            }
+            """#.utf8
+        )
+    )
+    let draft = try JSONDecoder().decode(
+        FeedbackWebDraft.self,
+        from: Data(
+            #"{"id":104688952,"form_id":4167,"answers":[],"file_promises":[]}"#
+                .utf8
+        )
+    )
+
+    let preflight = try FeedbackWebSubmissionValidator.preflight(
+        draft: draft,
+        form: form
+    )
+    #expect(!preflight.ready)
+    #expect(preflight.missingRequiredFields.map(\.tat) == [":required_file_zone"])
+}
+
 @Test func webSubmissionAnswerPayloadUsesAppleRequiredFileRepresentation() throws {
     let form = try JSONDecoder().decode(
         FeedbackWebFormSchema.self,
@@ -77,6 +182,26 @@ import Testing
     )
     #expect(fileAnswer["values"] as? Bool == false)
     #expect(fileAnswer["ignore_required"] as? Bool == true)
+}
+
+@Test func webSubmissionResponseRequiresTypedFeedbackRecord() throws {
+    let fileOnly = try JSONDecoder().decode(
+        FeedbackWebMutationResponse.self,
+        from: Data(
+            #"{"items":{"upsert":[{"id":60604757,"type":"FILE_PROMISE"}]}}"#
+                .utf8
+        )
+    )
+    #expect(fileOnly.items.feedbackID == nil)
+
+    let feedback = try JSONDecoder().decode(
+        FeedbackWebMutationResponse.self,
+        from: Data(
+            #"{"items":{"upsert":[{"id":60604757,"type":"FILE_PROMISE"},{"id":23050000,"type":"FEEDBACK"}]}}"#
+                .utf8
+        )
+    )
+    #expect(feedback.items.feedbackID == 23_050_000)
 }
 
 private let submissionFormJSON = #"""
