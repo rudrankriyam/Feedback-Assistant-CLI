@@ -258,7 +258,7 @@ enum RelatoCLI {
         var arguments = rawArguments
         guard !arguments.isEmpty else {
             throw RelatoError.invalidArgument(
-                "web drafts requires a subcommand: create, view, update, attach, validate"
+                "web drafts requires a subcommand: create, view, update, attach, validate, submit"
             )
         }
 
@@ -363,6 +363,19 @@ enum RelatoCLI {
                 locale: locale
             )
             try printJSON(preflight, pretty: !compact)
+            return
+        case "submit":
+            let id = try requireOption("--id", from: &arguments)
+            let confirmed = takeFlag("--confirm", from: &arguments)
+            try ensureNoArguments(arguments)
+            guard confirmed else {
+                throw RelatoError.invalidArgument(
+                    "web drafts submit requires --confirm; inspect `relato web drafts view --id \(id)` and `relato web drafts validate --id \(id)` first"
+                )
+            }
+            let client = try makeFeedbackWebClient()
+            let receipt = try await client.submitDraft(id: id, locale: locale)
+            try printJSON(receipt, pretty: !compact)
             return
         default:
             throw RelatoError.invalidArgument("Unknown web drafts subcommand: \(subcommand)")
@@ -1076,6 +1089,7 @@ enum RelatoCLI {
               relato web drafts update --id ID [--payload PATH] [field options] [--answer TAT=VALUE]... [--locale LOCALE] [--compact]
               relato web drafts attach --id ID [--file PATH]... [--payload PATH] [--locale LOCALE] [--compact]
               relato web drafts validate --id ID [--locale LOCALE] [--compact]
+              relato web drafts submit --id ID --confirm [--locale LOCALE] [--compact]
 
             Help topics:
               relato help payload
@@ -1338,13 +1352,23 @@ enum RelatoCLI {
                 required fields, treats an uploaded file promise as satisfying a visible
                 Required File Zone, and emits a machine-readable readiness result.
 
+              relato web drafts submit --id ID --confirm [--locale LOCALE] [--compact]
+                Saves the complete answer set using Apple's submission representation,
+                submits the server-backed draft, and verifies the returned feedback ID
+                through Apple's feedback-detail endpoint.
+
+                --confirm is required and has no alias. This creates an Apple feedback
+                report and must be used only after explicit user confirmation at action time.
+                Survey drafts use a different Apple workflow and fail closed.
+
             Output:
               JSON is pretty-printed by default for agent inspection.
               --compact emits compact JSON.
 
             Boundaries:
-              This experiment creates, reads, edits, and attaches files to drafts. It does
-              not yet submit feedback. The stable native workflow is unchanged.
+              This experiment creates, reads, edits, attaches files to, and submits
+              server-backed drafts. Survey submission remains unsupported, and the stable
+              native workflow is unchanged.
             """
         )
     }

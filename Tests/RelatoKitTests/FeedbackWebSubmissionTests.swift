@@ -55,6 +55,30 @@ import Testing
     #expect(preflight.missingRequiredFields.isEmpty)
 }
 
+@Test func webSubmissionAnswerPayloadUsesAppleRequiredFileRepresentation() throws {
+    let form = try JSONDecoder().decode(
+        FeedbackWebFormSchema.self,
+        from: Data(submissionFormJSON.utf8)
+    )
+    let draft = try JSONDecoder().decode(
+        FeedbackWebDraft.self,
+        from: Data(submissionDraftWithAttachmentJSON.utf8)
+    )
+
+    let data = try JSONEncoder().encode(
+        FeedbackWebSubmissionAnswerBuilder.payload(draft: draft, form: form)
+    )
+    let object = try #require(
+        JSONSerialization.jsonObject(with: data) as? [String: Any]
+    )
+    let answers = try #require(object["answers"] as? [[String: Any]])
+    let fileAnswer = try #require(
+        answers.first(where: { $0["question_id"] as? Int == 364164 })
+    )
+    #expect(fileAnswer["values"] as? Bool == false)
+    #expect(fileAnswer["ignore_required"] as? Bool == true)
+}
+
 private let submissionFormJSON = #"""
 {
   "id": 4167,

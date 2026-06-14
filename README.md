@@ -10,7 +10,7 @@ Local-first Swift tools for preparing and inspecting Feedback Assistant reports 
 
 RelatoKit (from the Portuguese `relato`, meaning report or account) provides a local-first Swift CLI and library for preparing Feedback Assistant reports on macOS. It can inspect the local Feedback Assistant store, generate structured report payloads, open Apple's native app, and assist with form entry through Accessibility automation.
 
-The stable workflow keeps authentication, diagnostics, and final submission inside Feedback Assistant. An isolated `relato web` experiment accesses Apple's undocumented Feedback Assistant web service through a headless Swift implementation of Apple's password-based SRP login and a Keychain-backed session. It can inspect Apple's form catalog, create and edit server-backed drafts, and upload attachments through Apple's file-promise protocol; final web submission remains under active validation.
+The stable workflow keeps authentication, diagnostics, and final submission inside Feedback Assistant. An isolated `relato web` experiment accesses Apple's undocumented Feedback Assistant web service through a headless Swift implementation of Apple's password-based SRP login and a Keychain-backed session. It can inspect Apple's form catalog, create and edit server-backed drafts, upload attachments through Apple's file-promise protocol, and submit only with an explicit `--confirm`.
 
 The CLI is optimized for agent workflows: create a machine-readable JSON payload, review the generated Markdown report, open and fill the native app, inspect Apple-only fields, and click Submit only after explicit confirmation.
 
@@ -81,6 +81,7 @@ The experimental web command family additionally provides:
 - read-only inbox, form catalog, and form schema JSON
 - server-backed submitted feedback details
 - server-backed draft creation from a form ID
+- explicit confirmed draft submission with server receipt verification
 
 ## First Commands
 
@@ -173,6 +174,7 @@ relato web drafts view --id ID [--locale LOCALE] [--compact]
 relato web drafts update --id ID [--payload PATH] [field options] [--answer TAT=VALUE]... [--locale LOCALE] [--compact]
 relato web drafts attach --id ID [--file PATH]... [--payload PATH] [--locale LOCALE] [--compact]
 relato web drafts validate --id ID [--locale LOCALE] [--compact]
+relato web drafts submit --id ID --confirm [--locale LOCALE] [--compact]
 relato version
 ```
 
@@ -226,6 +228,7 @@ relato web drafts attach \
   --id DRAFT_ID \
   --file ./evidence.md
 relato web drafts validate --id DRAFT_ID
+relato web drafts submit --id DRAFT_ID --confirm
 ```
 
 Raw inspection commands emit Apple's JSON response directly. `feedback view` reads the same server-backed detail envelope Apple's web client uses for a submitted report, while `feedback status` returns Apple's current status rows. `forms options` normalizes each question into its TAT, widget, requirement state, condition rules, and label/value choices. Draft updates fetch the current draft and form schema, preserve untouched answers, resolve labels such as `Foundation Models Framework` to Apple's submitted value, enforce Apple's 255-character text-field and 4096-character text-area limits, and then save the complete answer set.
@@ -236,13 +239,15 @@ Use `--payload feedback-submission.json` to import the common fields generated b
 
 `drafts validate` evaluates the current form's visible conditional questions and required answers before submission. Required File Zone questions are satisfied only by an uploaded file promise, so an uploaded attachment and a staged local path are not conflated.
 
+`drafts submit` requires `--confirm` with no alias. It reruns the schema-driven preflight, saves the complete answer set using Apple's special Required File Zone representation, sends the final draft mutation, and verifies the returned `FB` identifier against Apple's submitted-feedback detail endpoint. The command fails closed before authentication or network access when `--confirm` is absent, and it refuses survey drafts because Apple submits those through a different workflow.
+
 Clear the cached session:
 
 ```sh
 relato web auth logout
 ```
 
-This surface is unofficial and may break without notice. Draft creation, draft inspection, form option discovery, answer updates, and attachment upload have each been validated against Apple's web client. Submission remains excluded until its endpoint and response contract are validated independently.
+This surface is unofficial and may break without notice. Draft creation, draft inspection, form option discovery, answer updates, attachment upload, submission payload construction, and receipt reads follow Apple's current web client contracts.
 
 ## Automation Model
 
@@ -262,6 +267,7 @@ RelatoKit intentionally stays on the native Feedback Assistant side of the workf
 - Local store verification is local evidence only. It can show drafts, recent items, and upload-task changes, but it is not an Apple server receipt.
 - Private FeedbackCore and feedbackd APIs are research-only and are not used by the shipping CLI.
 - Experimental `relato web` commands use password-based Apple SRP authentication and keep only their resulting session in Keychain.
+- Experimental web submission requires an explicit `--confirm` and verifies Apple's returned feedback ID through a server read.
 - RelatoKit does not bypass entitlements, forge Apple credentials, patch platform security, or redistribute Apple private headers.
 
 ## Maturity

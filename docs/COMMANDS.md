@@ -71,6 +71,7 @@ Commands:
   relato web drafts update --id ID [--payload PATH] [field options] [--answer TAT=VALUE]... [--locale LOCALE] [--compact]
   relato web drafts attach --id ID [--file PATH]... [--payload PATH] [--locale LOCALE] [--compact]
   relato web drafts validate --id ID [--locale LOCALE] [--compact]
+  relato web drafts submit --id ID --confirm [--locale LOCALE] [--compact]
 
 Help topics:
   relato help payload
@@ -131,6 +132,7 @@ make generate-command-docs
 - `relato web drafts update --id ID [--payload PATH] [field options] [--answer TAT=VALUE]... [--locale LOCALE] [--compact]`
 - `relato web drafts attach --id ID [--file PATH]... [--payload PATH] [--locale LOCALE] [--compact]`
 - `relato web drafts validate --id ID [--locale LOCALE] [--compact]`
+- `relato web drafts submit --id ID --confirm [--locale LOCALE] [--compact]`
 
 ## Topic Help
 
@@ -402,13 +404,23 @@ Draft commands:
     required fields, treats an uploaded file promise as satisfying a visible
     Required File Zone, and emits a machine-readable readiness result.
 
+  relato web drafts submit --id ID --confirm [--locale LOCALE] [--compact]
+    Saves the complete answer set using Apple's submission representation,
+    submits the server-backed draft, and verifies the returned feedback ID
+    through Apple's feedback-detail endpoint.
+
+    --confirm is required and has no alias. This creates an Apple feedback
+    report and must be used only after explicit user confirmation at action time.
+    Survey drafts use a different Apple workflow and fail closed.
+
 Output:
   JSON is pretty-printed by default for agent inspection.
   --compact emits compact JSON.
 
 Boundaries:
-  This experiment creates, reads, edits, and attaches files to drafts. It does
-  not yet submit feedback. The stable native workflow is unchanged.
+  This experiment creates, reads, edits, attaches files to, and submits
+  server-backed drafts. Survey submission remains unsupported, and the stable
+  native workflow is unchanged.
 ```
 
 ## Scripting Tips

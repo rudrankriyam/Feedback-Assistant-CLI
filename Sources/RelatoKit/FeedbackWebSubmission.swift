@@ -29,6 +29,24 @@ public struct FeedbackWebSubmissionPreflight: Encodable, Sendable, Equatable {
     }
 }
 
+public struct FeedbackWebSubmissionReceipt: Encodable, Sendable, Equatable {
+    public let draftID: Int
+    public let formID: Int
+    public let feedbackID: Int
+    public let feedbackNumber: String
+    public let webURL: String
+    public let verified: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case draftID = "draft_id"
+        case formID = "form_id"
+        case feedbackID = "feedback_id"
+        case feedbackNumber = "feedback_number"
+        case webURL = "web_url"
+        case verified
+    }
+}
+
 public enum FeedbackWebSubmissionValidator {
     public static func preflight(
         draft: FeedbackWebDraft,
@@ -125,6 +143,143 @@ public enum FeedbackWebSubmissionValidator {
                 answersByTAT: answersByTAT
             )
         }
+    }
+}
+
+struct FeedbackWebSubmissionAnswersPayload: Encodable, Equatable {
+    let answers: [FeedbackWebSubmissionAnswer]
+}
+
+struct FeedbackWebSubmissionAnswer: Encodable, Equatable {
+    let questionID: Int
+    let values: FeedbackWebSubmissionAnswerValues
+    let ignoreRequired: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case questionID = "question_id"
+        case values
+        case ignoreRequired = "ignore_required"
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(questionID, forKey: .questionID)
+        switch values {
+        case .strings(let values):
+            try container.encode(values, forKey: .values)
+        case .ignoredRequiredFile:
+            try container.encode(false, forKey: .values)
+        }
+        try container.encodeIfPresent(ignoreRequired, forKey: .ignoreRequired)
+    }
+}
+
+enum FeedbackWebSubmissionAnswerValues: Equatable {
+    case strings([String])
+    case ignoredRequiredFile
+}
+
+enum FeedbackWebSubmissionAnswerBuilder {
+    static func payload(
+        draft: FeedbackWebDraft,
+        form: FeedbackWebFormSchema
+    ) -> FeedbackWebSubmissionAnswersPayload {
+        let questionsByID = Dictionary(
+            uniqueKeysWithValues: form.questions.map { ($0.id, $0) }
+        )
+        var answers = draft.answers.map { answer -> FeedbackWebSubmissionAnswer in
+            let tat = FeedbackWebFormSchema.normalizedTAT(
+                questionsByID[answer.questionID]?.tat ?? ""
+            )
+            if tat == ":required_file_zone" {
+                return FeedbackWebSubmissionAnswer(
+                    questionID: answer.questionID,
+                    values: .ignoredRequiredFile,
+                    ignoreRequired: true
+                )
+            }
+            return FeedbackWebSubmissionAnswer(
+                questionID: answer.questionID,
+                values: .strings(answer.values),
+                ignoreRequired: answer.ignoreRequired ? true : nil
+            )
+        }
+        var indexesByQuestionID: [Int: Int] = [:]
+        for (index, answer) in answers.enumerated() {
+            indexesByQuestionID[answer.questionID] = index
+        }
+
+        for question in FeedbackWebSubmissionValidator.visibleQuestions(
+            draft: draft,
+            form: form
+        ) where FeedbackWebFormSchema.normalizedTAT(question.tat) == ":required_file_zone" {
+            let answer = FeedbackWebSubmissionAnswer(
+                questionID: question.id,
+                values: .ignoredRequiredFile,
+                ignoreRequired: true
+            )
+            if let index = indexesByQuestionID[question.id] {
+                answers[index] = answer
+            } else {
+                indexesByQuestionID[question.id] = answers.count
+                answers.append(answer)
+            }
+        }
+
+        return FeedbackWebSubmissionAnswersPayload(answers: answers)
+    }
+}
+
+struct FeedbackWebSubmitPayload: Encodable {
+    let formResponse: FeedbackWebSubmitFormResponse
+
+    enum CodingKeys: String, CodingKey {
+        case formResponse = "form_response"
+    }
+}
+
+struct FeedbackWebSubmitFormResponse: Encodable {
+    let usedFiler: Bool
+    let answersComplete: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case usedFiler = "used_filer"
+        case answersComplete = "answers_complete"
+    }
+}
+
+struct FeedbackWebMutationResponse: Decodable {
+    let items: FeedbackWebMutationItems
+}
+
+struct FeedbackWebMutationItems: Decodable {
+    let upsert: [FeedbackWebMutationRecord]
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        upsert =
+            try container.decodeIfPresent([FeedbackWebMutationRecord].self, forKey: .upsert) ?? []
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case upsert
+    }
+}
+
+struct FeedbackWebMutationRecord: Decodable {
+    let id: Int
+    let type: String?
+}
+
+struct FeedbackWebSubmittedFeedbackDetails: Decodable {
+    let id: Int
+    let formResponseID: Int
+    let items: FeedbackWebMutationItems
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case formResponseID = "form_response_id"
+        case items
     }
 }
 

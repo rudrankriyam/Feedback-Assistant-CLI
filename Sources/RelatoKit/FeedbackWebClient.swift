@@ -172,25 +172,90 @@ public actor FeedbackWebClient {
         id: String,
         locale: String = "en"
     ) async throws -> FeedbackWebSubmissionPreflight {
-        let draftData = try await draft(id: id, locale: locale)
-        let draft = try decodeWebResponse(
-            FeedbackWebDraft.self,
-            from: draftData,
-            name: "draft"
-        )
-        let formData = try await form(
-            id: String(draft.formID),
-            locale: locale,
-            teamID: draft.teamID
-        )
-        let form = try decodeWebResponse(
-            FeedbackWebFormSchema.self,
-            from: formData,
-            name: "form schema"
-        )
+        let (draft, form) = try await submissionContext(id: id, locale: locale)
         return try FeedbackWebSubmissionValidator.preflight(
             draft: draft,
             form: form
+        )
+    }
+
+    public func submitDraft(
+        id: String,
+        locale: String = "en"
+    ) async throws -> FeedbackWebSubmissionReceipt {
+        let (draft, form) = try await submissionContext(id: id, locale: locale)
+        if form.formRole?.caseInsensitiveCompare("Survey") == .orderedSame {
+            throw RelatoError.invalidArgument(
+                "Survey draft submission is not supported by `relato web drafts submit`"
+            )
+        }
+        let preflight = try FeedbackWebSubmissionValidator.preflight(
+            draft: draft,
+            form: form
+        )
+        guard preflight.ready else {
+            let missing = preflight.missingRequiredFields.map(\.tat).joined(separator: ", ")
+            throw RelatoError.invalidArgument(
+                "Draft \(draft.id) is not ready to submit. Missing required fields: \(missing)"
+            )
+        }
+
+        let answerBody = try JSONEncoder().encode(
+            FeedbackWebSubmissionAnswerBuilder.payload(
+                draft: draft,
+                form: form
+            )
+        )
+        _ = try await request(
+            method: "PUT",
+            path:
+                "\(validatedLocale(locale))/feedback/form_responses/\(draft.id)/answers.json",
+            locale: locale,
+            body: answerBody
+        )
+
+        let submitBody = try JSONEncoder().encode(
+            FeedbackWebSubmitPayload(
+                formResponse: FeedbackWebSubmitFormResponse(
+                    usedFiler: true,
+                    answersComplete: true
+                )
+            )
+        )
+        let responseData = try await request(
+            method: "PUT",
+            path:
+                "\(validatedLocale(locale))/feedback/forms/\(form.id)/form_responses/\(draft.id)",
+            locale: locale,
+            body: submitBody
+        )
+        let response = try decodeWebResponse(
+            FeedbackWebMutationResponse.self,
+            from: responseData,
+            name: "submission"
+        )
+        let records = response.items.upsert.filter { $0.id > 0 }
+        let feedbackID =
+            records.first(where: {
+                $0.type?.caseInsensitiveCompare("FEEDBACK") == .orderedSame
+            })?.id
+            ?? (records.count == 1 ? records[0].id : nil)
+        guard let feedbackID else {
+            throw RelatoError.web("Apple did not return a feedback ID after submission")
+        }
+
+        try await verifySubmittedFeedback(
+            feedbackID: feedbackID,
+            draftID: draft.id,
+            locale: locale
+        )
+        return FeedbackWebSubmissionReceipt(
+            draftID: draft.id,
+            formID: form.id,
+            feedbackID: feedbackID,
+            feedbackNumber: "FB\(feedbackID)",
+            webURL: "\(FeedbackWebAPI.webBase.absoluteString)/feedback/\(feedbackID)",
+            verified: true
         )
     }
 
@@ -458,6 +523,64 @@ public actor FeedbackWebClient {
         }
         throw RelatoError.web(
             "attachment upload completed, but Apple did not return an uploaded file promise"
+        )
+    }
+
+    private func submissionContext(
+        id: String,
+        locale: String
+    ) async throws -> (FeedbackWebDraft, FeedbackWebFormSchema) {
+        let draftData = try await draft(id: id, locale: locale)
+        let draft = try decodeWebResponse(
+            FeedbackWebDraft.self,
+            from: draftData,
+            name: "draft"
+        )
+        let formData = try await form(
+            id: String(draft.formID),
+            locale: locale,
+            teamID: draft.teamID
+        )
+        let form = try decodeWebResponse(
+            FeedbackWebFormSchema.self,
+            from: formData,
+            name: "form schema"
+        )
+        return (draft, form)
+    }
+
+    private func verifySubmittedFeedback(
+        feedbackID: Int,
+        draftID: Int,
+        locale: String
+    ) async throws {
+        for attempt in 0..<10 {
+            if attempt > 0 {
+                try await Task.sleep(nanoseconds: 500_000_000)
+            }
+            do {
+                let data = try await feedback(id: String(feedbackID), locale: locale)
+                let details = try decodeWebResponse(
+                    FeedbackWebSubmittedFeedbackDetails.self,
+                    from: data,
+                    name: "submitted feedback details"
+                )
+                if details.id == feedbackID
+                    && details.formResponseID == draftID
+                    && details.items.upsert.contains(where: { $0.id == feedbackID })
+                {
+                    return
+                }
+            } catch FeedbackWebClientError.authenticationRequired {
+                throw FeedbackWebClientError.authenticationRequired
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                continue
+            }
+        }
+        throw RelatoError.web(
+            "Apple returned FB\(feedbackID), but server receipt verification did not confirm draft \(draftID)"
         )
     }
 

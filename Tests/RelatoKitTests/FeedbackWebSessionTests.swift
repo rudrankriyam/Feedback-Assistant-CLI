@@ -667,6 +667,295 @@ struct FeedbackWebClientTests {
                 == ["uploading", "upload_error"]
         )
     }
+
+    @Test func submitsDraftAndVerifiesServerReceipt() async throws {
+        defer {
+            FeedbackWebMockURLProtocol.handler = nil
+            FeedbackWebMockURLProtocol.lastRequest = nil
+            FeedbackWebMockURLProtocol.lastRequestBody = nil
+            FeedbackWebMockURLProtocol.requests = []
+            FeedbackWebMockURLProtocol.requestBodies = []
+        }
+
+        FeedbackWebMockURLProtocol.requests = []
+        FeedbackWebMockURLProtocol.requestBodies = []
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [FeedbackWebMockURLProtocol.self]
+        FeedbackWebMockURLProtocol.handler = { request in
+            let url = try #require(request.url)
+            let responseBody: Data
+
+            switch (request.httpMethod, url.path) {
+            case ("GET"?, "/sp/en/feedback/form_responses/104688952"):
+                responseBody = Data(
+                    #"""
+                    {
+                      "id": 104688952,
+                      "form_id": 4167,
+                      "answers": [
+                        {"question_id": 366028, "values": ["Video input"]},
+                        {"question_id": 366031, "values": ["Suggestion"]}
+                      ],
+                      "file_promises": [
+                        {
+                          "id": 60604757,
+                          "uuid": "BE25C106-A40B-4C79-B94E-B9BC8BD46640",
+                          "name": "evidence.md",
+                          "size": 823,
+                          "status_enum": 40
+                        }
+                      ]
+                    }
+                    """#.utf8
+                )
+            case ("GET"?, "/sp/en/feedback/forms/4167"):
+                responseBody = Data(
+                    #"""
+                    {
+                      "id": 4167,
+                      "name": "Developer Technologies & SDKs",
+                      "question_groups": [
+                        {
+                          "title": "Basic Information",
+                          "questions": [
+                            {
+                              "id": 366028,
+                              "tat": ":title",
+                              "text": "Title",
+                              "answer_widget": "Text Field",
+                              "is_required": true,
+                              "is_visible_in_form": true
+                            },
+                            {
+                              "id": 366031,
+                              "tat": ":type_req",
+                              "text": "Feedback type",
+                              "answer_widget": "Popup",
+                              "is_required": true,
+                              "is_visible_in_form": true
+                            },
+                            {
+                              "id": 364164,
+                              "tat": ":required_file_zone",
+                              "text": "Attach evidence",
+                              "answer_widget": "Required File Zone",
+                              "is_required": true,
+                              "is_visible_in_form": true,
+                              "conditions": "[[\":type_req\",\":==\",\"Suggestion\"]]"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                    """#.utf8
+                )
+            case ("PUT"?, "/sp/en/feedback/form_responses/104688952/answers.json"):
+                responseBody = Data(#"{"answers":[],"items":{"upsert":[]}}"#.utf8)
+            case ("PUT"?, "/sp/en/feedback/forms/4167/form_responses/104688952"):
+                responseBody = Data(
+                    #"{"items":{"upsert":[{"id":60604757,"type":"FILE_PROMISE"},{"id":23050000,"type":"FEEDBACK"}]}}"#
+                        .utf8
+                )
+            case ("GET"?, "/sp/feedback/feedback_details/feedback/23050000"):
+                responseBody = Data(
+                    #"{"id":23050000,"form_response_id":104688952,"items":{"upsert":[{"id":23050000,"type":"FEEDBACK"}]}}"#
+                        .utf8
+                )
+            default:
+                throw RelatoError.web(
+                    "unexpected mock submission request: \(request.httpMethod ?? "") \(url)"
+                )
+            }
+
+            let response = HTTPURLResponse(
+                url: url,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            return (response, responseBody)
+        }
+
+        let client = FeedbackWebClient(
+            session: FeedbackWebSession(cookies: []),
+            configuration: configuration
+        )
+        let receipt = try await client.submitDraft(id: "104688952")
+
+        #expect(receipt.draftID == 104688952)
+        #expect(receipt.formID == 4167)
+        #expect(receipt.feedbackID == 23050000)
+        #expect(receipt.feedbackNumber == "FB23050000")
+        #expect(receipt.webURL == "https://feedbackassistant.apple.com/feedback/23050000")
+        #expect(receipt.verified)
+
+        let requests = FeedbackWebMockURLProtocol.requests
+        #expect(requests.map(\.httpMethod) == ["GET", "GET", "PUT", "PUT", "GET"])
+        #expect(requests[2].url?.path.hasSuffix("/answers.json") == true)
+        #expect(
+            requests[3].url?.path
+                == "/sp/en/feedback/forms/4167/form_responses/104688952"
+        )
+        #expect(
+            requests[4].url?.path
+                == "/sp/feedback/feedback_details/feedback/23050000"
+        )
+
+        let answerBody = try #require(FeedbackWebMockURLProtocol.requestBodies[2])
+        let answerObject = try #require(
+            JSONSerialization.jsonObject(with: answerBody) as? [String: Any]
+        )
+        let answers = try #require(answerObject["answers"] as? [[String: Any]])
+        let fileAnswer = try #require(
+            answers.first(where: { $0["question_id"] as? Int == 364164 })
+        )
+        #expect(fileAnswer["values"] as? Bool == false)
+        #expect(fileAnswer["ignore_required"] as? Bool == true)
+
+        let submitBody = try #require(FeedbackWebMockURLProtocol.requestBodies[3])
+        let submitObject = try #require(
+            JSONSerialization.jsonObject(with: submitBody) as? [String: Any]
+        )
+        let formResponse = try #require(
+            submitObject["form_response"] as? [String: Bool]
+        )
+        #expect(
+            formResponse
+                == ["used_filer": true, "answers_complete": true]
+        )
+    }
+
+    @Test func refusesSubmissionBeforeMutationWhenRequiredFieldsAreMissing() async throws {
+        defer {
+            FeedbackWebMockURLProtocol.handler = nil
+            FeedbackWebMockURLProtocol.lastRequest = nil
+            FeedbackWebMockURLProtocol.lastRequestBody = nil
+            FeedbackWebMockURLProtocol.requests = []
+            FeedbackWebMockURLProtocol.requestBodies = []
+        }
+
+        FeedbackWebMockURLProtocol.requests = []
+        FeedbackWebMockURLProtocol.requestBodies = []
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [FeedbackWebMockURLProtocol.self]
+        FeedbackWebMockURLProtocol.handler = { request in
+            let url = try #require(request.url)
+            let responseBody: Data
+
+            switch (request.httpMethod, url.path) {
+            case ("GET"?, "/sp/en/feedback/form_responses/104688952"):
+                responseBody = Data(
+                    #"{"id":104688952,"form_id":4167,"answers":[],"file_promises":[]}"#
+                        .utf8
+                )
+            case ("GET"?, "/sp/en/feedback/forms/4167"):
+                responseBody = Data(
+                    #"""
+                    {
+                      "id": 4167,
+                      "name": "Developer Technologies & SDKs",
+                      "form_role": "Issue",
+                      "question_groups": [
+                        {
+                          "title": "Basic Information",
+                          "questions": [
+                            {
+                              "id": 366028,
+                              "tat": ":title",
+                              "text": "Title",
+                              "answer_widget": "Text Field",
+                              "is_required": true,
+                              "is_visible_in_form": true
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                    """#.utf8
+                )
+            default:
+                throw RelatoError.web(
+                    "unexpected mock preflight request: \(request.httpMethod ?? "") \(url)"
+                )
+            }
+
+            let response = HTTPURLResponse(
+                url: url,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            return (response, responseBody)
+        }
+
+        let client = FeedbackWebClient(
+            session: FeedbackWebSession(cookies: []),
+            configuration: configuration
+        )
+        await #expect(throws: RelatoError.self) {
+            try await client.submitDraft(id: "104688952")
+        }
+        #expect(FeedbackWebMockURLProtocol.requests.map(\.httpMethod) == ["GET", "GET"])
+    }
+
+    @Test func refusesSurveySubmissionBeforeMutation() async throws {
+        defer {
+            FeedbackWebMockURLProtocol.handler = nil
+            FeedbackWebMockURLProtocol.lastRequest = nil
+            FeedbackWebMockURLProtocol.lastRequestBody = nil
+            FeedbackWebMockURLProtocol.requests = []
+            FeedbackWebMockURLProtocol.requestBodies = []
+        }
+
+        FeedbackWebMockURLProtocol.requests = []
+        FeedbackWebMockURLProtocol.requestBodies = []
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [FeedbackWebMockURLProtocol.self]
+        FeedbackWebMockURLProtocol.handler = { request in
+            let url = try #require(request.url)
+            let responseBody: Data
+
+            switch (request.httpMethod, url.path) {
+            case ("GET"?, "/sp/en/feedback/form_responses/104688952"):
+                responseBody = Data(
+                    #"{"id":104688952,"form_id":4167,"answers":[],"file_promises":[]}"#
+                        .utf8
+                )
+            case ("GET"?, "/sp/en/feedback/forms/4167"):
+                responseBody = Data(
+                    #"""
+                    {
+                      "id": 4167,
+                      "name": "Developer Survey",
+                      "form_role": "Survey",
+                      "question_groups": []
+                    }
+                    """#.utf8
+                )
+            default:
+                throw RelatoError.web(
+                    "unexpected mock survey request: \(request.httpMethod ?? "") \(url)"
+                )
+            }
+
+            let response = HTTPURLResponse(
+                url: url,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            return (response, responseBody)
+        }
+
+        let client = FeedbackWebClient(
+            session: FeedbackWebSession(cookies: []),
+            configuration: configuration
+        )
+        await #expect(throws: RelatoError.self) {
+            try await client.submitDraft(id: "104688952")
+        }
+        #expect(FeedbackWebMockURLProtocol.requests.map(\.httpMethod) == ["GET", "GET"])
+    }
 }
 
 private final class FeedbackWebMockURLProtocol: URLProtocol, @unchecked Sendable {
