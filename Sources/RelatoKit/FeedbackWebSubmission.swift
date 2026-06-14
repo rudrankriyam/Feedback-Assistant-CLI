@@ -351,8 +351,8 @@ private enum FeedbackWebConditionEvaluator {
         }
         if let string = value as? String {
             let tat = FeedbackWebFormSchema.normalizedTAT(string)
-            if string.hasPrefix(":"), let answer = answersByTAT[tat] {
-                return .string(answer)
+            if string.hasPrefix(":") {
+                return .string(answersByTAT[tat] ?? "")
             }
             return .string(string)
         }

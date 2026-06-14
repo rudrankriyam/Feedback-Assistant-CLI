@@ -160,6 +160,78 @@ import Testing
     #expect(preflight.missingRequiredFields.map(\.tat) == [":required_file_zone"])
 }
 
+@Test func webSubmissionPreflightTreatsMissingConditionAnswersAsEmpty() throws {
+    let form = try JSONDecoder().decode(
+        FeedbackWebFormSchema.self,
+        from: Data(
+            #"""
+            {
+              "id": 4167,
+              "name": "Developer Technologies & SDKs",
+              "question_groups": [
+                {
+                  "questions": [
+                    {
+                      "id": 366031,
+                      "tat": ":type_req",
+                      "text": "Feedback type",
+                      "answer_widget": "Popup",
+                      "is_visible_in_form": true
+                    },
+                    {
+                      "id": 366032,
+                      "tat": ":description",
+                      "text": "Description",
+                      "answer_widget": "Text Area",
+                      "is_required": true,
+                      "is_visible_in_form": true,
+                      "conditions": "[[\":type_req\",\":==\",\"\"]]"
+                    }
+                  ]
+                }
+              ]
+            }
+            """#.utf8
+        )
+    )
+    let unansweredDraft = try JSONDecoder().decode(
+        FeedbackWebDraft.self,
+        from: Data(
+            #"{"id":104688952,"form_id":4167,"answers":[],"file_promises":[]}"#
+                .utf8
+        )
+    )
+
+    let unanswered = try FeedbackWebSubmissionValidator.preflight(
+        draft: unansweredDraft,
+        form: form
+    )
+    #expect(!unanswered.ready)
+    #expect(unanswered.missingRequiredFields.map(\.tat) == [":description"])
+
+    let answeredDraft = try JSONDecoder().decode(
+        FeedbackWebDraft.self,
+        from: Data(
+            #"""
+            {
+              "id": 104688952,
+              "form_id": 4167,
+              "answers": [
+                {"question_id": 366031, "values": ["Suggestion"]}
+              ],
+              "file_promises": []
+            }
+            """#.utf8
+        )
+    )
+    let answered = try FeedbackWebSubmissionValidator.preflight(
+        draft: answeredDraft,
+        form: form
+    )
+    #expect(answered.ready)
+    #expect(answered.missingRequiredFields.isEmpty)
+}
+
 @Test func webSubmissionAnswerPayloadUsesAppleRequiredFileRepresentation() throws {
     let form = try JSONDecoder().decode(
         FeedbackWebFormSchema.self,
