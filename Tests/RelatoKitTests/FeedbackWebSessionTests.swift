@@ -195,6 +195,49 @@ import Testing
     #expect(saved.cookies.count == 1)
 }
 
+@Test func webFileSessionStoreMergesCookiesFromStaleSessions() throws {
+    let directoryURL = FileManager.default.temporaryDirectory
+        .appendingPathComponent("relato-web-session-\(UUID().uuidString)")
+    let store = FeedbackWebSessionStore(
+        backend: .file,
+        directoryURL: directoryURL
+    )
+    defer { try? FileManager.default.removeItem(at: directoryURL) }
+    let original = FeedbackWebSession(cookies: [
+        FeedbackWebCookie(
+            name: "session",
+            value: "original",
+            domain: ".apple.com"
+        )
+    ])
+    try store.save(original)
+
+    let firstCookie = try #require(
+        HTTPCookie(properties: [
+            .name: "first",
+            .value: "one",
+            .domain: "appleseed.apple.com",
+            .path: "/sp/",
+        ])
+    )
+    let secondCookie = try #require(
+        HTTPCookie(properties: [
+            .name: "second",
+            .value: "two",
+            .domain: "appleseed.apple.com",
+            .path: "/sp/",
+        ])
+    )
+
+    _ = try store.mergeResponseCookies([firstCookie], into: original)
+    _ = try store.mergeResponseCookies([secondCookie], into: original)
+
+    let saved = try #require(try store.load())
+    #expect(saved.cookies.contains(where: { $0.name == "session" }))
+    #expect(saved.cookies.contains(where: { $0.name == "first" }))
+    #expect(saved.cookies.contains(where: { $0.name == "second" }))
+}
+
 @Test func webFileSessionStoreRejectsBroadDirectoryWithoutChangingIt() throws {
     let directoryURL = FileManager.default.temporaryDirectory
         .appendingPathComponent("relato-web-session-\(UUID().uuidString)")
@@ -398,6 +441,74 @@ struct FeedbackWebClientTests {
             cached.cookies.first(where: { $0.name == "SP-XSRF-TOKEN" })?.value
                 == "original"
         )
+    }
+
+    @Test func responseCookieSavePreservesParallelSessionUpdates() async throws {
+        defer {
+            FeedbackWebMockURLProtocol.handler = nil
+            FeedbackWebMockURLProtocol.lastRequest = nil
+            FeedbackWebMockURLProtocol.lastRequestBody = nil
+        }
+
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = FeedbackWebSessionStore(
+            backend: .file,
+            directoryURL: directory
+        )
+        let original = FeedbackWebSession(cookies: [
+            FeedbackWebCookie(
+                name: "session",
+                value: "original",
+                domain: ".apple.com"
+            )
+        ])
+        try store.save(original)
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [FeedbackWebMockURLProtocol.self]
+        FeedbackWebMockURLProtocol.handler = { request in
+            let parallelSession = FeedbackWebSession(cookies: original.cookies + [
+                FeedbackWebCookie(
+                    name: "parallel",
+                    value: "preserved",
+                    domain: "appleseed.apple.com",
+                    path: "/sp/"
+                )
+            ])
+            try store.save(parallelSession)
+            let response = HTTPURLResponse(
+                url: try #require(request.url),
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: [
+                    "Content-Type": "application/json",
+                    "Set-Cookie":
+                        "SP-XSRF-TOKEN=refreshed; Domain=appleseed.apple.com; Path=/sp/; Secure",
+                ]
+            )!
+            return (response, Data(#"{"items":[]}"#.utf8))
+        }
+
+        let client = FeedbackWebClient(
+            session: original,
+            sessionStore: store,
+            configuration: configuration
+        )
+        _ = try await client.authenticate()
+
+        let saved = try #require(try store.load())
+        #expect(
+            saved.cookies.first(where: { $0.name == "parallel" })?.value
+                == "preserved"
+        )
+        #expect(
+            saved.cookies.first(where: { $0.name == "SP-XSRF-TOKEN" })?.value
+                == "refreshed"
+        )
+        let current = await client.currentSession()
+        #expect(current == saved)
     }
 
     @Test func createsServerBackedDraftForForm() async throws {

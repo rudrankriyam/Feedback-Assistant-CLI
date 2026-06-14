@@ -195,6 +195,50 @@ public struct FeedbackWebSessionStore: Sendable {
     }
 
     public func load() throws -> FeedbackWebSession? {
+        try withStoreLock {
+            try loadUnlocked()
+        }
+    }
+
+    public func save(_ session: FeedbackWebSession) throws {
+        let data = try encodeSession(session)
+        try withStoreLock {
+            try saveUnlocked(data)
+        }
+    }
+
+    @discardableResult
+    public func mergeResponseCookies(
+        _ responseCookies: [HTTPCookie],
+        into session: FeedbackWebSession,
+        now: Date = Date()
+    ) throws -> FeedbackWebSession {
+        try withStoreLock {
+            var storedSession = try loadUnlocked() ?? session
+            if let storedAccount = storedSession.accountIdentifierHash,
+                let requestAccount = session.accountIdentifierHash,
+                storedAccount != requestAccount
+            {
+                throw RelatoError.web(
+                    "cached web session changed while the request was in flight; retry"
+                )
+            }
+            if storedSession.accountIdentifierHash == nil {
+                storedSession.accountIdentifierHash = session.accountIdentifierHash
+            }
+            storedSession.merge(responseCookies, now: now)
+            try saveUnlocked(try encodeSession(storedSession))
+            return storedSession
+        }
+    }
+
+    public func delete() throws {
+        try withStoreLock {
+            try deleteUnlocked()
+        }
+    }
+
+    private func loadUnlocked() throws -> FeedbackWebSession? {
         switch backend {
         case .file:
             return try loadFile()
@@ -203,14 +247,7 @@ public struct FeedbackWebSessionStore: Sendable {
         }
     }
 
-    public func save(_ session: FeedbackWebSession) throws {
-        let data: Data
-        do {
-            data = try JSONEncoder().encode(session)
-        } catch {
-            throw RelatoError.web("could not encode the web session")
-        }
-
+    private func saveUnlocked(_ data: Data) throws {
         switch backend {
         case .file:
             try saveFile(data)
@@ -219,7 +256,7 @@ public struct FeedbackWebSessionStore: Sendable {
         }
     }
 
-    public func delete() throws {
+    private func deleteUnlocked() throws {
         switch backend {
         case .file:
             try deleteFile()
@@ -251,122 +288,110 @@ public struct FeedbackWebSessionStore: Sendable {
     }
 
     private func loadFile() throws -> FeedbackWebSession? {
-        try withStoreLock {
-            guard FileManager.default.fileExists(atPath: sessionFileURL.path) else {
-                return nil
-            }
-            try validateSessionDirectory()
-            try validateSessionFile()
-            let data: Data
-            do {
-                data = try Data(contentsOf: sessionFileURL)
-            } catch {
-                throw RelatoError.web("could not read the cached web session")
-            }
-            return try decodeSession(data)
+        guard FileManager.default.fileExists(atPath: sessionFileURL.path) else {
+            return nil
         }
+        try validateSessionDirectory()
+        try validateSessionFile()
+        let data: Data
+        do {
+            data = try Data(contentsOf: sessionFileURL)
+        } catch {
+            throw RelatoError.web("could not read the cached web session")
+        }
+        return try decodeSession(data)
     }
 
     private func saveFile(_ data: Data) throws {
-        try withStoreLock {
-            try prepareSessionDirectory()
-            let temporaryURL = directoryURL.appendingPathComponent(
-                ".session-\(UUID().uuidString).tmp",
-                isDirectory: false
-            )
-            guard FileManager.default.createFile(
-                atPath: temporaryURL.path,
-                contents: data,
-                attributes: [.posixPermissions: 0o600]
-            ) else {
-                throw RelatoError.web("could not write the cached web session")
-            }
-            defer { try? FileManager.default.removeItem(at: temporaryURL) }
+        try prepareSessionDirectory()
+        let temporaryURL = directoryURL.appendingPathComponent(
+            ".session-\(UUID().uuidString).tmp",
+            isDirectory: false
+        )
+        guard FileManager.default.createFile(
+            atPath: temporaryURL.path,
+            contents: data,
+            attributes: [.posixPermissions: 0o600]
+        ) else {
+            throw RelatoError.web("could not write the cached web session")
+        }
+        defer { try? FileManager.default.removeItem(at: temporaryURL) }
 
-            do {
-                try FileManager.default.setAttributes(
-                    [.posixPermissions: 0o600],
-                    ofItemAtPath: temporaryURL.path
-                )
-            } catch {
-                throw RelatoError.web("could not secure the cached web session")
-            }
-            guard Darwin.rename(temporaryURL.path, sessionFileURL.path) == 0 else {
-                throw fileError(operation: "finalize")
-            }
+        do {
+            try FileManager.default.setAttributes(
+                [.posixPermissions: 0o600],
+                ofItemAtPath: temporaryURL.path
+            )
+        } catch {
+            throw RelatoError.web("could not secure the cached web session")
+        }
+        guard Darwin.rename(temporaryURL.path, sessionFileURL.path) == 0 else {
+            throw fileError(operation: "finalize")
         }
     }
 
     private func deleteFile() throws {
-        try withStoreLock {
-            do {
-                try FileManager.default.removeItem(at: sessionFileURL)
-            } catch CocoaError.fileNoSuchFile {
-                return
-            } catch {
-                throw RelatoError.web("could not delete the cached web session")
-            }
+        do {
+            try FileManager.default.removeItem(at: sessionFileURL)
+        } catch CocoaError.fileNoSuchFile {
+            return
+        } catch {
+            throw RelatoError.web("could not delete the cached web session")
         }
     }
 
     private func loadKeychain() throws -> FeedbackWebSession? {
-        try withStoreLock {
-            var query = baseQuery
-            query[kSecReturnData as String] = true
-            query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var query = baseQuery
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
 
-            var item: CFTypeRef?
-            let status = SecItemCopyMatching(query as CFDictionary, &item)
-            if status == errSecItemNotFound {
-                return nil
-            }
-            guard status == errSecSuccess, let data = item as? Data else {
-                throw keychainError(operation: "load", status: status)
-            }
-            return try decodeSession(data)
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        if status == errSecItemNotFound {
+            return nil
         }
+        guard status == errSecSuccess, let data = item as? Data else {
+            throw keychainError(operation: "load", status: status)
+        }
+        return try decodeSession(data)
     }
 
     private func saveKeychain(_ data: Data) throws {
-        try withStoreLock {
-            var query = baseQuery
-            let updateAttributes: [String: Any] = [
-                kSecValueData as String: data
-            ]
-            let status = SecItemUpdate(query as CFDictionary, updateAttributes as CFDictionary)
-            if status == errSecSuccess {
-                return
-            }
-            if status != errSecItemNotFound {
-                throw keychainError(operation: "update", status: status)
-            }
-
-            query.merge(updateAttributes) { _, new in new }
-            query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-            let addStatus = SecItemAdd(query as CFDictionary, nil)
-            if addStatus == errSecSuccess {
-                return
-            }
-            if addStatus == errSecDuplicateItem {
-                let retryStatus = SecItemUpdate(
-                    baseQuery as CFDictionary,
-                    updateAttributes as CFDictionary
-                )
-                guard retryStatus == errSecSuccess else {
-                    throw keychainError(operation: "update", status: retryStatus)
-                }
-                return
-            }
-            throw keychainError(operation: "save", status: addStatus)
+        var query = baseQuery
+        let updateAttributes: [String: Any] = [
+            kSecValueData as String: data
+        ]
+        let status = SecItemUpdate(query as CFDictionary, updateAttributes as CFDictionary)
+        if status == errSecSuccess {
+            return
         }
+        if status != errSecItemNotFound {
+            throw keychainError(operation: "update", status: status)
+        }
+
+        query.merge(updateAttributes) { _, new in new }
+        query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        let addStatus = SecItemAdd(query as CFDictionary, nil)
+        if addStatus == errSecSuccess {
+            return
+        }
+        if addStatus == errSecDuplicateItem {
+            let retryStatus = SecItemUpdate(
+                baseQuery as CFDictionary,
+                updateAttributes as CFDictionary
+            )
+            guard retryStatus == errSecSuccess else {
+                throw keychainError(operation: "update", status: retryStatus)
+            }
+            return
+        }
+        throw keychainError(operation: "save", status: addStatus)
     }
 
     private func deleteKeychain() throws {
-        try withStoreLock {
-            let status = SecItemDelete(baseQuery as CFDictionary)
-            guard status == errSecSuccess || status == errSecItemNotFound else {
-                throw keychainError(operation: "delete", status: status)
-            }
+        let status = SecItemDelete(baseQuery as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw keychainError(operation: "delete", status: status)
         }
     }
 
@@ -492,6 +517,14 @@ public struct FeedbackWebSessionStore: Sendable {
             return try JSONDecoder().decode(FeedbackWebSession.self, from: data)
         } catch {
             throw RelatoError.web("could not decode the cached web session")
+        }
+    }
+
+    private func encodeSession(_ session: FeedbackWebSession) throws -> Data {
+        do {
+            return try JSONEncoder().encode(session)
+        } catch {
+            throw RelatoError.web("could not encode the web session")
         }
     }
 

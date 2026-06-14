@@ -435,8 +435,14 @@ public actor FeedbackWebClient {
             for: url
         )
         if !responseCookies.isEmpty {
-            session.merge(responseCookies)
-            try sessionStore?.save(session)
+            if let sessionStore {
+                session = try sessionStore.mergeResponseCookies(
+                    responseCookies,
+                    into: session
+                )
+            } else {
+                session.merge(responseCookies)
+            }
         }
         return data
     }
