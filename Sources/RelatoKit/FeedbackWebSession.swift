@@ -106,6 +106,26 @@ public struct FeedbackWebSession: Codable, Equatable, Sendable {
     }
 
     public func cookieHeader(for url: URL, now: Date = Date()) -> String? {
+        cookieHeader(for: url, now: now) { $0.value }
+    }
+
+    func appleAuthenticationCookieHeader(
+        for url: URL,
+        now: Date = Date()
+    ) -> String? {
+        cookieHeader(for: url, now: now) { cookie in
+            guard cookie.name.contains("DES"), !cookie.value.hasPrefix("\"") else {
+                return cookie.value
+            }
+            return "\"\(cookie.value)\""
+        }
+    }
+
+    private func cookieHeader(
+        for url: URL,
+        now: Date,
+        value: (FeedbackWebCookie) -> String
+    ) -> String? {
         let applicable = cookies
             .filter { $0.applies(to: url, now: now) }
             .sorted {
@@ -115,7 +135,7 @@ public struct FeedbackWebSession: Codable, Equatable, Sendable {
                 return $0.path.count > $1.path.count
             }
         guard !applicable.isEmpty else { return nil }
-        return applicable.map { "\($0.name)=\($0.value)" }.joined(separator: "; ")
+        return applicable.map { "\($0.name)=\(value($0))" }.joined(separator: "; ")
     }
 
     public func csrfToken(for url: URL, now: Date = Date()) -> String? {

@@ -67,6 +67,27 @@ import Testing
     #expect(hostOnly.cookieHeader(for: subdomain) == nil)
 }
 
+@Test func webSessionQuotesAppleDESAuthenticationCookies() throws {
+    let session = FeedbackWebSession(cookies: [
+        FeedbackWebCookie(
+            name: "DES5c148586dfd36821_1",
+            value: "authentication-value",
+            domain: ".apple.com"
+        ),
+        FeedbackWebCookie(
+            name: "dslang",
+            value: "US-EN",
+            domain: ".apple.com"
+        ),
+    ])
+
+    let header = try #require(
+        session.appleAuthenticationCookieHeader(for: FeedbackWebAPI.loginURL)
+    )
+    #expect(header.contains(#"DES5c148586dfd36821_1="authentication-value""#))
+    #expect(header.contains("dslang=US-EN"))
+}
+
 @Test func webSessionMergesReplacementAndExpiredCookies() throws {
     var session = FeedbackWebSession(cookies: [
         FeedbackWebCookie(
@@ -295,14 +316,9 @@ import Testing
 @Suite(.serialized)
 struct FeedbackWebClientTests {
     @Test func usesAppleseedHeadersAndRefreshesSession() async throws {
-        defer {
-            FeedbackWebMockURLProtocol.handler = nil
-            FeedbackWebMockURLProtocol.lastRequest = nil
-            FeedbackWebMockURLProtocol.lastRequestBody = nil
-        }
+        defer { FeedbackWebMockURLProtocol.reset() }
 
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [FeedbackWebMockURLProtocol.self]
+        let configuration = FeedbackWebMockURLProtocol.configuration()
         FeedbackWebMockURLProtocol.handler = { request in
             let response = HTTPURLResponse(
                 url: try #require(request.url),
@@ -353,14 +369,9 @@ struct FeedbackWebClientTests {
     }
 
     @Test func treatsLoginRedirectAsExpiredSession() async throws {
-        defer {
-            FeedbackWebMockURLProtocol.handler = nil
-            FeedbackWebMockURLProtocol.lastRequest = nil
-            FeedbackWebMockURLProtocol.lastRequestBody = nil
-        }
+        defer { FeedbackWebMockURLProtocol.reset() }
 
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [FeedbackWebMockURLProtocol.self]
+        let configuration = FeedbackWebMockURLProtocol.configuration()
         FeedbackWebMockURLProtocol.handler = { request in
             let response = HTTPURLResponse(
                 url: try #require(request.url),
@@ -384,14 +395,9 @@ struct FeedbackWebClientTests {
     }
 
     @Test func rejectedResponsesDoNotOverwriteCachedSessionCookies() async throws {
-        defer {
-            FeedbackWebMockURLProtocol.handler = nil
-            FeedbackWebMockURLProtocol.lastRequest = nil
-            FeedbackWebMockURLProtocol.lastRequestBody = nil
-        }
+        defer { FeedbackWebMockURLProtocol.reset() }
 
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [FeedbackWebMockURLProtocol.self]
+        let configuration = FeedbackWebMockURLProtocol.configuration()
         FeedbackWebMockURLProtocol.handler = { request in
             let response = HTTPURLResponse(
                 url: try #require(request.url),
@@ -444,11 +450,7 @@ struct FeedbackWebClientTests {
     }
 
     @Test func responseCookieSavePreservesParallelSessionUpdates() async throws {
-        defer {
-            FeedbackWebMockURLProtocol.handler = nil
-            FeedbackWebMockURLProtocol.lastRequest = nil
-            FeedbackWebMockURLProtocol.lastRequestBody = nil
-        }
+        defer { FeedbackWebMockURLProtocol.reset() }
 
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -466,8 +468,7 @@ struct FeedbackWebClientTests {
         ])
         try store.save(original)
 
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [FeedbackWebMockURLProtocol.self]
+        let configuration = FeedbackWebMockURLProtocol.configuration()
         FeedbackWebMockURLProtocol.handler = { request in
             let parallelSession = FeedbackWebSession(cookies: original.cookies + [
                 FeedbackWebCookie(
@@ -512,14 +513,9 @@ struct FeedbackWebClientTests {
     }
 
     @Test func createsServerBackedDraftForForm() async throws {
-        defer {
-            FeedbackWebMockURLProtocol.handler = nil
-            FeedbackWebMockURLProtocol.lastRequest = nil
-            FeedbackWebMockURLProtocol.lastRequestBody = nil
-        }
+        defer { FeedbackWebMockURLProtocol.reset() }
 
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [FeedbackWebMockURLProtocol.self]
+        let configuration = FeedbackWebMockURLProtocol.configuration()
         FeedbackWebMockURLProtocol.handler = { request in
             let response = HTTPURLResponse(
                 url: try #require(request.url),
@@ -559,14 +555,9 @@ struct FeedbackWebClientTests {
     }
 
     @Test func readsServerBackedDraft() async throws {
-        defer {
-            FeedbackWebMockURLProtocol.handler = nil
-            FeedbackWebMockURLProtocol.lastRequest = nil
-            FeedbackWebMockURLProtocol.lastRequestBody = nil
-        }
+        defer { FeedbackWebMockURLProtocol.reset() }
 
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [FeedbackWebMockURLProtocol.self]
+        let configuration = FeedbackWebMockURLProtocol.configuration()
         FeedbackWebMockURLProtocol.handler = { request in
             let response = HTTPURLResponse(
                 url: try #require(request.url),
@@ -600,14 +591,9 @@ struct FeedbackWebClientTests {
     }
 
     @Test func readsSubmittedFeedbackDetails() async throws {
-        defer {
-            FeedbackWebMockURLProtocol.handler = nil
-            FeedbackWebMockURLProtocol.lastRequest = nil
-            FeedbackWebMockURLProtocol.lastRequestBody = nil
-        }
+        defer { FeedbackWebMockURLProtocol.reset() }
 
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [FeedbackWebMockURLProtocol.self]
+        let configuration = FeedbackWebMockURLProtocol.configuration()
         FeedbackWebMockURLProtocol.handler = { request in
             let response = HTTPURLResponse(
                 url: try #require(request.url),
@@ -644,14 +630,9 @@ struct FeedbackWebClientTests {
     }
 
     @Test func readsSubmittedFeedbackStatus() async throws {
-        defer {
-            FeedbackWebMockURLProtocol.handler = nil
-            FeedbackWebMockURLProtocol.lastRequest = nil
-            FeedbackWebMockURLProtocol.lastRequestBody = nil
-        }
+        defer { FeedbackWebMockURLProtocol.reset() }
 
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [FeedbackWebMockURLProtocol.self]
+        let configuration = FeedbackWebMockURLProtocol.configuration()
         FeedbackWebMockURLProtocol.handler = { request in
             let response = HTTPURLResponse(
                 url: try #require(request.url),
@@ -688,14 +669,9 @@ struct FeedbackWebClientTests {
     }
 
     @Test func updatesCompleteDraftAnswerSet() async throws {
-        defer {
-            FeedbackWebMockURLProtocol.handler = nil
-            FeedbackWebMockURLProtocol.lastRequest = nil
-            FeedbackWebMockURLProtocol.lastRequestBody = nil
-        }
+        defer { FeedbackWebMockURLProtocol.reset() }
 
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [FeedbackWebMockURLProtocol.self]
+        let configuration = FeedbackWebMockURLProtocol.configuration()
         FeedbackWebMockURLProtocol.handler = { request in
             let response = HTTPURLResponse(
                 url: try #require(request.url),
@@ -744,18 +720,10 @@ struct FeedbackWebClientTests {
     }
 
     @Test func uploadsAndVerifiesDraftAttachment() async throws {
-        defer {
-            FeedbackWebMockURLProtocol.handler = nil
-            FeedbackWebMockURLProtocol.lastRequest = nil
-            FeedbackWebMockURLProtocol.lastRequestBody = nil
-            FeedbackWebMockURLProtocol.requests = []
-            FeedbackWebMockURLProtocol.requestBodies = []
-        }
+        defer { FeedbackWebMockURLProtocol.reset() }
 
-        FeedbackWebMockURLProtocol.requests = []
-        FeedbackWebMockURLProtocol.requestBodies = []
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [FeedbackWebMockURLProtocol.self]
+        FeedbackWebMockURLProtocol.reset()
+        let configuration = FeedbackWebMockURLProtocol.configuration()
         FeedbackWebMockURLProtocol.handler = { request in
             let url = try #require(request.url)
             let responseBody: Data
@@ -869,18 +837,10 @@ struct FeedbackWebClientTests {
     }
 
     @Test func marksFilePromiseErroredWhenObjectUploadFails() async throws {
-        defer {
-            FeedbackWebMockURLProtocol.handler = nil
-            FeedbackWebMockURLProtocol.lastRequest = nil
-            FeedbackWebMockURLProtocol.lastRequestBody = nil
-            FeedbackWebMockURLProtocol.requests = []
-            FeedbackWebMockURLProtocol.requestBodies = []
-        }
+        defer { FeedbackWebMockURLProtocol.reset() }
 
-        FeedbackWebMockURLProtocol.requests = []
-        FeedbackWebMockURLProtocol.requestBodies = []
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [FeedbackWebMockURLProtocol.self]
+        FeedbackWebMockURLProtocol.reset()
+        let configuration = FeedbackWebMockURLProtocol.configuration()
         FeedbackWebMockURLProtocol.handler = { request in
             let url = try #require(request.url)
             let status: Int
@@ -955,18 +915,10 @@ struct FeedbackWebClientTests {
     }
 
     @Test func submitsDraftAndVerifiesServerReceipt() async throws {
-        defer {
-            FeedbackWebMockURLProtocol.handler = nil
-            FeedbackWebMockURLProtocol.lastRequest = nil
-            FeedbackWebMockURLProtocol.lastRequestBody = nil
-            FeedbackWebMockURLProtocol.requests = []
-            FeedbackWebMockURLProtocol.requestBodies = []
-        }
+        defer { FeedbackWebMockURLProtocol.reset() }
 
-        FeedbackWebMockURLProtocol.requests = []
-        FeedbackWebMockURLProtocol.requestBodies = []
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [FeedbackWebMockURLProtocol.self]
+        FeedbackWebMockURLProtocol.reset()
+        let configuration = FeedbackWebMockURLProtocol.configuration()
         FeedbackWebMockURLProtocol.handler = { request in
             let url = try #require(request.url)
             let responseBody: Data
@@ -1112,18 +1064,10 @@ struct FeedbackWebClientTests {
     }
 
     @Test func refusesSubmissionBeforeMutationWhenRequiredFieldsAreMissing() async throws {
-        defer {
-            FeedbackWebMockURLProtocol.handler = nil
-            FeedbackWebMockURLProtocol.lastRequest = nil
-            FeedbackWebMockURLProtocol.lastRequestBody = nil
-            FeedbackWebMockURLProtocol.requests = []
-            FeedbackWebMockURLProtocol.requestBodies = []
-        }
+        defer { FeedbackWebMockURLProtocol.reset() }
 
-        FeedbackWebMockURLProtocol.requests = []
-        FeedbackWebMockURLProtocol.requestBodies = []
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [FeedbackWebMockURLProtocol.self]
+        FeedbackWebMockURLProtocol.reset()
+        let configuration = FeedbackWebMockURLProtocol.configuration()
         FeedbackWebMockURLProtocol.handler = { request in
             let url = try #require(request.url)
             let responseBody: Data
@@ -1185,18 +1129,10 @@ struct FeedbackWebClientTests {
     }
 
     @Test func refusesSurveySubmissionBeforeMutation() async throws {
-        defer {
-            FeedbackWebMockURLProtocol.handler = nil
-            FeedbackWebMockURLProtocol.lastRequest = nil
-            FeedbackWebMockURLProtocol.lastRequestBody = nil
-            FeedbackWebMockURLProtocol.requests = []
-            FeedbackWebMockURLProtocol.requestBodies = []
-        }
+        defer { FeedbackWebMockURLProtocol.reset() }
 
-        FeedbackWebMockURLProtocol.requests = []
-        FeedbackWebMockURLProtocol.requestBodies = []
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [FeedbackWebMockURLProtocol.self]
+        FeedbackWebMockURLProtocol.reset()
+        let configuration = FeedbackWebMockURLProtocol.configuration()
         FeedbackWebMockURLProtocol.handler = { request in
             let url = try #require(request.url)
             let responseBody: Data
@@ -1251,6 +1187,20 @@ private final class FeedbackWebMockURLProtocol: URLProtocol, @unchecked Sendable
     nonisolated(unsafe) static var lastRequestBody: Data?
     nonisolated(unsafe) static var requests: [URLRequest] = []
     nonisolated(unsafe) static var requestBodies: [Data?] = []
+
+    static func configuration() -> URLSessionConfiguration {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [Self.self]
+        return configuration
+    }
+
+    static func reset() {
+        handler = nil
+        lastRequest = nil
+        lastRequestBody = nil
+        requests = []
+        requestBodies = []
+    }
 
     override class func canInit(with request: URLRequest) -> Bool {
         true

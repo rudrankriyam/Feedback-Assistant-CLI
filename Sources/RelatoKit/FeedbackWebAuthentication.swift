@@ -68,15 +68,8 @@ public actor FeedbackWebAuthenticator {
         session: FeedbackWebSession = FeedbackWebSession(cookies: []),
         configuration: URLSessionConfiguration = .ephemeral
     ) {
-        let isolatedConfiguration = configuration.copy() as! URLSessionConfiguration
-        isolatedConfiguration.httpShouldSetCookies = false
-        isolatedConfiguration.requestCachePolicy = .reloadIgnoringLocalCacheData
         self.session = session
-        self.urlSession = URLSession(
-            configuration: isolatedConfiguration,
-            delegate: FeedbackWebRedirectDelegate(),
-            delegateQueue: nil
-        )
+        self.urlSession = FeedbackWebHTTP.makeSession(configuration: configuration)
     }
 
     public func login(
@@ -600,11 +593,11 @@ public actor FeedbackWebAuthenticator {
         request.httpMethod = method
         request.httpBody = body
         request.timeoutInterval = 60
-        request.setValue("RelatoKit/experimental-web", forHTTPHeaderField: "User-Agent")
+        request.setValue(FeedbackWebHTTP.userAgent, forHTTPHeaderField: "User-Agent")
         for (name, value) in headers {
             request.setValue(value, forHTTPHeaderField: name)
         }
-        if let cookieHeader = appleCookieHeader(for: url) {
+        if let cookieHeader = session.appleAuthenticationCookieHeader(for: url) {
             request.setValue(cookieHeader, forHTTPHeaderField: "Cookie")
         }
 
@@ -620,40 +613,13 @@ public actor FeedbackWebAuthenticator {
         }
 
         let responseCookies = HTTPCookie.cookies(
-            withResponseHeaderFields: responseHeaderFields(http),
+            withResponseHeaderFields: FeedbackWebHTTP.responseHeaderFields(http),
             for: url
         )
         if !responseCookies.isEmpty {
             session.merge(responseCookies)
         }
         return WebResponse(data: data, http: http)
-    }
-
-    private func appleCookieHeader(for url: URL) -> String? {
-        let cookies = session.cookies
-            .filter { $0.applies(to: url) }
-            .sorted {
-                if $0.path.count == $1.path.count {
-                    return $0.name < $1.name
-                }
-                return $0.path.count > $1.path.count
-            }
-        guard !cookies.isEmpty else {
-            return nil
-        }
-        return cookies.map { cookie in
-            var value = cookie.value
-            if cookie.name.contains("DES"), !value.hasPrefix("\"") {
-                value = "\"\(value)\""
-            }
-            return "\(cookie.name)=\(value)"
-        }.joined(separator: "; ")
-    }
-
-    private func responseHeaderFields(_ response: HTTPURLResponse) -> [String: String] {
-        response.allHeaderFields.reduce(into: [:]) { result, pair in
-            result[String(describing: pair.key)] = String(describing: pair.value)
-        }
     }
 
     private func serviceErrorCodes(_ data: Data) -> [String] {

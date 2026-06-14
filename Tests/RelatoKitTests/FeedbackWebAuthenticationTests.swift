@@ -102,7 +102,7 @@ import Testing
 @Suite(.serialized)
 struct FeedbackWebAuthenticationFlowTests {
     @Test func performsHeadlessSRPAndBootstrapsAppleseed() async throws {
-        defer { FeedbackWebAuthenticationMockURLProtocol.handler = nil }
+        defer { FeedbackWebAuthenticationMockURLProtocol.reset() }
         var requests: [URLRequest] = []
         FeedbackWebAuthenticationMockURLProtocol.handler = { request in
             requests.append(request)
@@ -153,7 +153,7 @@ struct FeedbackWebAuthenticationFlowTests {
         }
 
         let authenticator = FeedbackWebAuthenticator(
-            configuration: mockConfiguration()
+            configuration: FeedbackWebAuthenticationMockURLProtocol.configuration()
         )
         let session = try await authenticator.login(
             appleID: "user@example.com",
@@ -182,7 +182,7 @@ struct FeedbackWebAuthenticationFlowTests {
     }
 
     @Test func discardsCachedCookiesBeforeReauthentication() async throws {
-        defer { FeedbackWebAuthenticationMockURLProtocol.handler = nil }
+        defer { FeedbackWebAuthenticationMockURLProtocol.reset() }
         var requests: [URLRequest] = []
         FeedbackWebAuthenticationMockURLProtocol.handler = { request in
             requests.append(request)
@@ -235,7 +235,7 @@ struct FeedbackWebAuthenticationFlowTests {
         )
         let authenticator = FeedbackWebAuthenticator(
             session: cached,
-            configuration: mockConfiguration()
+            configuration: FeedbackWebAuthenticationMockURLProtocol.configuration()
         )
         let session = try await authenticator.login(
             appleID: "user@example.com",
@@ -247,7 +247,7 @@ struct FeedbackWebAuthenticationFlowTests {
     }
 
     @Test func completesPhoneTwoFactorBeforeAppleseedBootstrap() async throws {
-        defer { FeedbackWebAuthenticationMockURLProtocol.handler = nil }
+        defer { FeedbackWebAuthenticationMockURLProtocol.reset() }
         var requests: [URLRequest] = []
         FeedbackWebAuthenticationMockURLProtocol.handler = { request in
             requests.append(request)
@@ -314,7 +314,7 @@ struct FeedbackWebAuthenticationFlowTests {
 
         let recorder = ChallengeRecorder()
         let authenticator = FeedbackWebAuthenticator(
-            configuration: mockConfiguration()
+            configuration: FeedbackWebAuthenticationMockURLProtocol.configuration()
         )
         let session = try await authenticator.login(
             appleID: "user@example.com",
@@ -354,7 +354,7 @@ struct FeedbackWebAuthenticationFlowTests {
     }
 
     @Test func completesTrustedDeviceTwoFactorBeforeAppleseedBootstrap() async throws {
-        defer { FeedbackWebAuthenticationMockURLProtocol.handler = nil }
+        defer { FeedbackWebAuthenticationMockURLProtocol.reset() }
         var requests: [URLRequest] = []
         FeedbackWebAuthenticationMockURLProtocol.handler = { request in
             requests.append(request)
@@ -420,7 +420,7 @@ struct FeedbackWebAuthenticationFlowTests {
 
         let recorder = ChallengeRecorder()
         let authenticator = FeedbackWebAuthenticator(
-            configuration: mockConfiguration()
+            configuration: FeedbackWebAuthenticationMockURLProtocol.configuration()
         )
         let session = try await authenticator.login(
             appleID: "user@example.com",
@@ -449,7 +449,7 @@ struct FeedbackWebAuthenticationFlowTests {
     }
 
     @Test func rotatesContinuationHeadersDuringTrustedDeviceFallback() async throws {
-        defer { FeedbackWebAuthenticationMockURLProtocol.handler = nil }
+        defer { FeedbackWebAuthenticationMockURLProtocol.reset() }
         var requests: [URLRequest] = []
         FeedbackWebAuthenticationMockURLProtocol.handler = { request in
             requests.append(request)
@@ -575,7 +575,7 @@ struct FeedbackWebAuthenticationFlowTests {
 
         let recorder = ChallengeRecorder()
         let authenticator = FeedbackWebAuthenticator(
-            configuration: mockConfiguration()
+            configuration: FeedbackWebAuthenticationMockURLProtocol.configuration()
         )
         let session = try await authenticator.login(
             appleID: "user@example.com",
@@ -607,7 +607,7 @@ struct FeedbackWebAuthenticationFlowTests {
     }
 
     @Test func trustedDeviceServerErrorDoesNotTriggerPhoneFallback() async throws {
-        defer { FeedbackWebAuthenticationMockURLProtocol.handler = nil }
+        defer { FeedbackWebAuthenticationMockURLProtocol.reset() }
         var requests: [URLRequest] = []
         FeedbackWebAuthenticationMockURLProtocol.handler = { request in
             requests.append(request)
@@ -652,7 +652,7 @@ struct FeedbackWebAuthenticationFlowTests {
         }
 
         let authenticator = FeedbackWebAuthenticator(
-            configuration: mockConfiguration()
+            configuration: FeedbackWebAuthenticationMockURLProtocol.configuration()
         )
         await #expect(
             throws: FeedbackWebAuthenticationError.requestFailed(
@@ -675,7 +675,7 @@ struct FeedbackWebAuthenticationFlowTests {
     }
 
     @Test func phoneRateLimitIsReportedAsARequestFailure() async throws {
-        defer { FeedbackWebAuthenticationMockURLProtocol.handler = nil }
+        defer { FeedbackWebAuthenticationMockURLProtocol.reset() }
         var requests: [URLRequest] = []
         FeedbackWebAuthenticationMockURLProtocol.handler = { request in
             requests.append(request)
@@ -722,7 +722,7 @@ struct FeedbackWebAuthenticationFlowTests {
         }
 
         let authenticator = FeedbackWebAuthenticator(
-            configuration: mockConfiguration()
+            configuration: FeedbackWebAuthenticationMockURLProtocol.configuration()
         )
         await #expect(
             throws: FeedbackWebAuthenticationError.requestFailed(
@@ -760,6 +760,16 @@ private final class FeedbackWebAuthenticationMockURLProtocol:
     nonisolated(unsafe) static var handler:
         ((URLRequest) throws -> (HTTPURLResponse, Data))?
 
+    static func configuration() -> URLSessionConfiguration {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [Self.self]
+        return configuration
+    }
+
+    static func reset() {
+        handler = nil
+    }
+
     override class func canInit(with request: URLRequest) -> Bool {
         true
     }
@@ -783,12 +793,6 @@ private final class FeedbackWebAuthenticationMockURLProtocol:
     }
 
     override func stopLoading() {}
-}
-
-private func mockConfiguration() -> URLSessionConfiguration {
-    let configuration = URLSessionConfiguration.ephemeral
-    configuration.protocolClasses = [FeedbackWebAuthenticationMockURLProtocol.self]
-    return configuration
 }
 
 private func response(

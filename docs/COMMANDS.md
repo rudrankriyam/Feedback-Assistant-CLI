@@ -12,7 +12,7 @@ This file is generated from live CLI help output. RelatoKit is optimized for age
 6. Inspect Feedback Assistant for native-only fields, popups, diagnostics, and staged attachments.
 7. Use `--confirm` only after explicit user confirmation.
 8. Use `relato store list` and `relato store uploads` as local evidence afterward; they are not Apple server receipts.
-9. Use `relato web` only for the isolated experimental read-only web workflow.
+9. Keep `relato web` isolated as an experimental server-backed workflow; require `--confirm` for submission.
 
 ## Payload Contract
 
@@ -95,7 +95,8 @@ Safety:
   Its endpoints may change without notice. Draft creation, inspection, and
   schema-validated answer updates are supported. Attachment upload uses
   Apple's file-promise protocol and verifies the result from the draft.
-  Final web submission is not yet exposed.
+  Confirmed submission verifies the resulting feedback ID through Apple's
+  feedback-detail endpoint.
 ```
 
 To regenerate:
@@ -441,5 +442,5 @@ Boundaries:
 - Use `relato store summary` and `relato store list` for local verification after native submission.
 - Treat local store verification as local evidence, not an Apple server receipt.
 - `--select-popups` briefly activates Feedback Assistant to select native platform, area, and type menus.
-- Use `relato web auth status` before experimental read-only web requests.
+- Use `relato web auth status` before experimental web requests.
 - Treat `relato web` response schemas as unstable and preserve raw JSON when debugging.

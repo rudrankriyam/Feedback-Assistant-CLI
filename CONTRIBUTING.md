@@ -25,6 +25,6 @@ make check
 
 ## Boundaries
 
-RelatoKit is native Feedback Assistant automation. It should not bypass entitlements, forge Apple credentials, patch platform protections, inject into Apple processes, or implement private headless submission.
+RelatoKit automates Feedback Assistant through native Accessibility and an experimental authenticated web workflow. It should not bypass entitlements, forge Apple credentials, patch platform protections, or inject into Apple processes.
 
-Keep research probes in `Research/`, outside the normal Swift package build.
+Undocumented web submission must require explicit user confirmation and verify the resulting Apple server record.
