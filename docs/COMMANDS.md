@@ -319,13 +319,14 @@ Authentication:
     Performs Apple Account SRP authentication directly from Swift. The password
     is read from a secure terminal prompt by default and is never stored.
     Trusted-device and trusted-phone two-factor challenges are supported.
-    RelatoKit stores the resulting cookies and a one-way account hash in Keychain.
+    RelatoKit stores only the resulting cookies and a one-way account hash.
 
   relato web auth status
     Validates the cached session against Feedback Assistant.
 
   relato web auth logout
-    Deletes the local Keychain session. It does not revoke Apple sessions.
+    Deletes the local session from the selected backend. It does not revoke
+    Apple sessions.
 
 Login options and environment:
   --apple-id EMAIL
@@ -340,6 +341,14 @@ Login options and environment:
     Supplies the password non-interactively. A secure terminal prompt is safer
     for human use because environment variables may be exposed to child
     processes or shell tooling.
+
+  RELATO_WEB_SESSION_BACKEND
+    Selects file or keychain session storage. The default is file, which avoids
+    recurring Keychain approval prompts for locally rebuilt unsigned binaries.
+
+  RELATO_WEB_SESSION_DIR
+    Overrides the file session directory. The default is ~/.relato/web.
+    RelatoKit enforces directory mode 0700 and session file mode 0600.
 
 Headless boundary:
   Password-based Apple Accounts, including trusted-device and trusted-phone 2FA,

@@ -10,7 +10,7 @@ Local-first Swift tools for preparing and inspecting Feedback Assistant reports 
 
 RelatoKit (from the Portuguese `relato`, meaning report or account) provides a local-first Swift CLI and library for preparing Feedback Assistant reports on macOS. It can inspect the local Feedback Assistant store, generate structured report payloads, open Apple's native app, and assist with form entry through Accessibility automation.
 
-The stable workflow keeps authentication, diagnostics, and final submission inside Feedback Assistant. An isolated `relato web` experiment accesses Apple's undocumented Feedback Assistant web service through a headless Swift implementation of Apple's password-based SRP login and a Keychain-backed session. It can inspect Apple's form catalog, create and edit server-backed drafts, upload attachments through Apple's file-promise protocol, and submit only with an explicit `--confirm`.
+The stable workflow keeps authentication, diagnostics, and final submission inside Feedback Assistant. An isolated `relato web` experiment accesses Apple's undocumented Feedback Assistant web service through a headless Swift implementation of Apple's password-based SRP login and an owner-only local session cache. It can inspect Apple's form catalog, create and edit server-backed drafts, upload attachments through Apple's file-promise protocol, and submit only with an explicit `--confirm`.
 
 The CLI is optimized for agent workflows: create a machine-readable JSON payload, review the generated Markdown report, open and fill the native app, inspect Apple-only fields, and click Submit only after explicit confirmation.
 
@@ -34,7 +34,7 @@ relato submit --payload feedback-submission.json --select-popups
 - Xcode command line tools
 - Feedback Assistant installed and signed in
 - Accessibility permission for Terminal, if you use native form filling
-- Keychain access and a password-based Apple Account, if you use experimental `relato web` commands
+- A password-based Apple Account, if you use experimental `relato web` commands
 
 ## Installation
 
@@ -76,7 +76,7 @@ The experimental web command family additionally provides:
 
 - headless Apple Account SRP login implemented in Swift
 - trusted-device and trusted-phone two-factor authentication
-- Feedback Assistant session storage in macOS Keychain
+- prompt-free Feedback Assistant session storage with owner-only permissions
 - live session validation against Apple's Appleseed service
 - read-only inbox, form catalog, and form schema JSON
 - server-backed submitted feedback details
@@ -199,7 +199,17 @@ relato web auth login --apple-id "developer@example.com"
 relato web auth status
 ```
 
-The login command performs Apple's password-based SRP exchange directly in Swift. By default it reads the password and any verification code from secure terminal prompts. It supports trusted-device and trusted-phone two-factor authentication, stores the resulting Feedback Assistant cookies and a one-way account hash in Keychain, and never prints credential or cookie values.
+The login command performs Apple's password-based SRP exchange directly in Swift. By default it reads the password and any verification code from secure terminal prompts. It supports trusted-device and trusted-phone two-factor authentication, stores only the resulting Feedback Assistant cookies and a one-way account hash, and never prints credential or cookie values.
+
+Web sessions default to `~/.relato/web/session.json`. RelatoKit creates the directory with mode `0700`, atomically replaces the session file with mode `0600`, and rejects session files with group or other access. This avoids recurring macOS Keychain approval prompts when a locally built unsigned CLI changes identity after every rebuild. The file contains bearer session cookies and must not be synced, shared, or committed.
+
+For a stable signed binary, opt into macOS Keychain storage:
+
+```sh
+RELATO_WEB_SESSION_BACKEND=keychain relato web auth login --apple-id "developer@example.com"
+```
+
+Set `RELATO_WEB_SESSION_DIR` to override the file cache directory.
 
 For non-interactive agents, set `RELATO_WEB_APPLE_ID` and `RELATO_WEB_PASSWORD`, and optionally provide `--two-factor-code-command COMMAND` or `RELATO_WEB_2FA_CODE_COMMAND`. The command must print only the current verification code to stdout. Environment-provided passwords are convenient for automation but are less private than the secure prompt.
 
@@ -261,13 +271,13 @@ For the automation model, see [docs/AX_AUTOMATION.md](docs/AX_AUTOMATION.md).
 
 ## Safety Boundaries
 
-RelatoKit intentionally stays on the native Feedback Assistant side of the workflow:
+RelatoKit keeps the stable native workflow separate from the experimental web workflow:
 
-- `--confirm` presses the native Submit button through Accessibility. It is not private headless submission.
+- `relato submit --confirm` presses the native Submit button through Accessibility.
 - Local store verification is local evidence only. It can show drafts, recent items, and upload-task changes, but it is not an Apple server receipt.
 - Private FeedbackCore and feedbackd APIs are research-only and are not used by the shipping CLI.
-- Experimental `relato web` commands use password-based Apple SRP authentication and keep only their resulting session in Keychain.
-- Experimental web submission requires an explicit `--confirm` and verifies Apple's returned feedback ID through a server read.
+- Experimental `relato web` commands use password-based Apple SRP authentication and keep only the resulting session. File storage is owner-only by default; Keychain storage is opt-in.
+- `relato web drafts submit --confirm` uses Apple's undocumented Appleseed service and verifies the returned feedback ID through a server read.
 - RelatoKit does not bypass entitlements, forge Apple credentials, patch platform security, or redistribute Apple private headers.
 
 ## Maturity

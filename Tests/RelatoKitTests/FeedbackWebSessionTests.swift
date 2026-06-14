@@ -134,9 +134,96 @@ import Testing
     #expect(decoded.cookies == cached.cookies)
 }
 
-@Test func webSessionStoreHandlesConcurrentInitialSaves() async throws {
+@Test func webFileSessionStoreUsesOwnerOnlyPermissions() throws {
+    let directoryURL = FileManager.default.temporaryDirectory
+        .appendingPathComponent("relato-web-session-\(UUID().uuidString)")
     let store = FeedbackWebSessionStore(
-        service: "com.rryam.RelatoKit.tests.\(UUID().uuidString)"
+        backend: .file,
+        directoryURL: directoryURL
+    )
+    defer { try? FileManager.default.removeItem(at: directoryURL) }
+    let session = FeedbackWebSession(cookies: [
+        FeedbackWebCookie(
+            name: "session",
+            value: "value",
+            domain: ".apple.com"
+        )
+    ])
+
+    try store.save(session)
+
+    #expect(try store.load() == session)
+    let directoryAttributes = try FileManager.default.attributesOfItem(
+        atPath: directoryURL.path
+    )
+    #expect(
+        (directoryAttributes[.posixPermissions] as? NSNumber)?.intValue == 0o700
+    )
+    let sessionURL = directoryURL.appendingPathComponent("session.json")
+    let fileAttributes = try FileManager.default.attributesOfItem(atPath: sessionURL.path)
+    #expect((fileAttributes[.posixPermissions] as? NSNumber)?.intValue == 0o600)
+}
+
+@Test func webFileSessionStoreHandlesConcurrentSaves() async throws {
+    let directoryURL = FileManager.default.temporaryDirectory
+        .appendingPathComponent("relato-web-session-\(UUID().uuidString)")
+    let store = FeedbackWebSessionStore(
+        backend: .file,
+        directoryURL: directoryURL
+    )
+    defer { try? FileManager.default.removeItem(at: directoryURL) }
+
+    try await withThrowingTaskGroup(of: Void.self) { group in
+        for index in 0..<16 {
+            group.addTask {
+                try store.save(
+                    FeedbackWebSession(cookies: [
+                        FeedbackWebCookie(
+                            name: "session",
+                            value: "\(index)",
+                            domain: ".apple.com"
+                        )
+                    ])
+                )
+            }
+        }
+        try await group.waitForAll()
+    }
+
+    let loaded = try store.load()
+    let saved = try #require(loaded)
+    #expect(saved.cookies.count == 1)
+}
+
+@Test func webFileSessionStoreRejectsBroadDirectoryWithoutChangingIt() throws {
+    let directoryURL = FileManager.default.temporaryDirectory
+        .appendingPathComponent("relato-web-session-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(
+        at: directoryURL,
+        withIntermediateDirectories: true,
+        attributes: [.posixPermissions: 0o755]
+    )
+    try FileManager.default.setAttributes(
+        [.posixPermissions: 0o755],
+        ofItemAtPath: directoryURL.path
+    )
+    defer { try? FileManager.default.removeItem(at: directoryURL) }
+    let store = FeedbackWebSessionStore(
+        backend: .file,
+        directoryURL: directoryURL
+    )
+
+    #expect(throws: RelatoError.self) {
+        try store.save(FeedbackWebSession(cookies: []))
+    }
+    let attributes = try FileManager.default.attributesOfItem(atPath: directoryURL.path)
+    #expect((attributes[.posixPermissions] as? NSNumber)?.intValue == 0o755)
+}
+
+@Test func webKeychainSessionStoreHandlesConcurrentInitialSaves() async throws {
+    let store = FeedbackWebSessionStore(
+        service: "com.rryam.RelatoKit.tests.\(UUID().uuidString)",
+        backend: .keychain
     )
     defer { try? store.delete() }
 
