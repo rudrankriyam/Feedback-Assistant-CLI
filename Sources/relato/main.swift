@@ -154,13 +154,12 @@ enum RelatoCLI {
                 _ = try decodeJSONObject(response)
                 try printJSONObject([
                     "authenticated": true,
-                    "source": store.source,
+                    "source": "srp",
                     "storage": store.source,
                 ])
             } catch FeedbackWebClientError.authenticationRequired {
                 try printJSONObject([
                     "authenticated": false,
-                    "source": store.source,
                     "storage": store.source,
                 ])
             }
