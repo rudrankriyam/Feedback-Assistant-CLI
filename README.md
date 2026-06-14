@@ -6,11 +6,11 @@
 [![SPM](https://img.shields.io/badge/SPM-compatible-brightgreen.svg)](https://swift.org/package-manager/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-Local-first Swift tools for preparing Feedback Assistant reports on macOS.
+Local-first Swift tools for preparing and inspecting Feedback Assistant reports on macOS.
 
 RelatoKit (from the Portuguese `relato`, meaning report or account) provides a local-first Swift CLI and library for preparing Feedback Assistant reports on macOS. It can inspect the local Feedback Assistant store, generate structured report payloads, open Apple's native app, and assist with form entry through Accessibility automation.
 
-RelatoKit keeps authentication, diagnostics, and final submission inside Feedback Assistant. It does not bypass entitlements, disable platform security, forge Apple credentials, or submit feedback without explicit `--confirm` confirmation.
+The stable workflow keeps authentication, diagnostics, and final submission inside Feedback Assistant. An isolated `relato web` experiment adds read-only access to Apple's undocumented Feedback Assistant web service through a headless Swift implementation of Apple's password-based SRP login and a Keychain-backed session. It does not yet create drafts, upload files, or submit feedback.
 
 The CLI is optimized for agent workflows: create a machine-readable JSON payload, review the generated Markdown report, open and fill the native app, inspect Apple-only fields, and click Submit only after explicit confirmation.
 
@@ -34,6 +34,7 @@ relato submit --payload feedback-submission.json --select-popups
 - Xcode command line tools
 - Feedback Assistant installed and signed in
 - Accessibility permission for Terminal, if you use native form filling
+- Keychain access and a password-based Apple Account, if you use experimental `relato web` commands
 
 ## Installation
 
@@ -70,6 +71,14 @@ RelatoKit gives you a small command-line workflow around the native Feedback Ass
 - AX-driven title, description, bundle ID, platform/technology/type popup selection, and submit handoff
 - background local attachment staging into Feedback Assistant draft folders
 - fail-closed behavior when native controls require focus, keyboard, or pointer ownership
+
+The experimental web command family additionally provides:
+
+- headless Apple Account SRP login implemented in Swift
+- trusted-device and trusted-phone two-factor authentication
+- Feedback Assistant session storage in macOS Keychain
+- live session validation against Apple's Appleseed service
+- read-only inbox, form catalog, and form schema JSON
 
 ## First Commands
 
@@ -148,6 +157,12 @@ relato open ROUTE [--id ID] [--print-only]
 relato open-native [--payload PATH]
 relato fill [--payload PATH] [--select-popups]
 relato submit [--payload PATH] [--select-popups] [--wait-seconds N] [--verify-wait-seconds N] [--db PATH] [--confirm] [--verify-store] [--dry-run]
+relato web auth login --apple-id EMAIL [--two-factor-code-command COMMAND]
+relato web auth status
+relato web auth logout
+relato web inbox list [--locale LOCALE] [--team-id ID] [--compact]
+relato web forms list [--locale LOCALE] [--team-id ID] [--compact]
+relato web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]
 relato version
 ```
 
@@ -158,7 +173,43 @@ relato help payload
 relato help submit
 relato help fill
 relato help store
+relato help web
 ```
+
+## Experimental Web Access
+
+`relato web` is an isolated, read-only experiment inspired by the detached `asc web` command family. It uses `https://appleseed.apple.com/sp/`, not the public App Store Connect API and not ASC's private Iris API.
+
+Authenticate:
+
+```sh
+relato web auth login --apple-id "developer@example.com"
+relato web auth status
+```
+
+The login command performs Apple's password-based SRP exchange directly in Swift. By default it reads the password and any verification code from secure terminal prompts. It supports trusted-device and trusted-phone two-factor authentication, stores the resulting Feedback Assistant cookies and a one-way account hash in Keychain, and never prints credential or cookie values.
+
+For non-interactive agents, set `RELATO_WEB_APPLE_ID` and `RELATO_WEB_PASSWORD`, and optionally provide `--two-factor-code-command COMMAND` or `RELATO_WEB_2FA_CODE_COMMAND`. The command must print only the current verification code to stdout. Environment-provided passwords are convenient for automation but are less private than the secure prompt.
+
+This path does not open WebKit, Chrome, or the ASC binary. Passkey-only accounts and Apple Account prompts that require browser interaction are not supported by the headless experiment.
+
+Inspect server data:
+
+```sh
+relato web inbox list
+relato web forms list
+relato web forms view --id FORM_ID
+```
+
+These commands emit Apple's JSON response directly. Use `--compact` for compact JSON and `--team-id ID` for a team-scoped request.
+
+Clear the cached session:
+
+```sh
+relato web auth logout
+```
+
+This surface is unofficial and may break without notice. The branch intentionally excludes web draft creation, answer updates, attachment upload, and submission until authentication, CSRF refresh, endpoint behavior, and response contracts have been validated independently.
 
 ## Automation Model
 
@@ -177,18 +228,19 @@ RelatoKit intentionally stays on the native Feedback Assistant side of the workf
 - `--confirm` presses the native Submit button through Accessibility. It is not private headless submission.
 - Local store verification is local evidence only. It can show drafts, recent items, and upload-task changes, but it is not an Apple server receipt.
 - Private FeedbackCore and feedbackd APIs are research-only and are not used by the shipping CLI.
+- Experimental `relato web` commands are read-only, use password-based Apple SRP authentication, and keep only their resulting session in Keychain.
 - RelatoKit does not bypass entitlements, forge Apple credentials, patch platform security, or redistribute Apple private headers.
 
 ## Maturity
 
-RelatoKit is pre-1.0. The stable surface is report preparation, local store inspection, native route launch, text-field fill, native popup selection, local attachment staging, explicit native submit handoff, and best-effort local verification. Research probes live under `Research/` and are not part of the SwiftPM build.
+RelatoKit is pre-1.0. The stable surface is report preparation, local store inspection, native route launch, text-field fill, native popup selection, local attachment staging, explicit native submit handoff, and best-effort local verification. The read-only `relato web` command family is experimental. Research probes live under `Research/` and are not part of the SwiftPM build.
 
 ## Non-Goals
 
 - No entitlement bypass.
 - No forged Apple credentials.
 - No SIP or platform security workarounds.
-- No private headless submission to Apple.
+- No web draft mutation, attachment upload, or headless submission to Apple in the experimental command family.
 - No redistribution of Apple private headers or copied framework code.
 
 ## Build

@@ -12,6 +12,7 @@ This file is generated from live CLI help output. RelatoKit is optimized for age
 6. Inspect Feedback Assistant for native-only fields, popups, diagnostics, and staged attachments.
 7. Use `--confirm` only after explicit user confirmation.
 8. Use `relato store list` and `relato store uploads` as local evidence afterward; they are not Apple server receipts.
+9. Use `relato web` only for the isolated experimental read-only web workflow.
 
 ## Payload Contract
 
@@ -26,8 +27,9 @@ This file is generated from live CLI help output. RelatoKit is optimized for age
 relato: agent-first tooling for Apple Feedback Assistant workflows
 
 RelatoKit is designed for coding agents preparing useful Feedback Assistant
-reports through Apple's native macOS app. It keeps authentication, diagnostics,
-and final submission inside Feedback Assistant.
+reports. Its stable workflow uses Apple's native macOS app. The experimental
+`web` command family provides read-only access to Apple's undocumented
+Feedback Assistant web service after an explicit Apple Account login.
 
 Agent workflow:
   1. Research the issue and write any supporting evidence to a local file.
@@ -55,6 +57,12 @@ Commands:
   relato open-native [--payload PATH]
   relato fill [--payload PATH] [--select-popups]
   relato submit [--payload PATH] [--select-popups] [--wait-seconds N] [--verify-wait-seconds N] [--db PATH] [--confirm] [--verify-store] [--dry-run]
+  relato web auth login --apple-id EMAIL [--two-factor-code-command COMMAND]
+  relato web auth status
+  relato web auth logout
+  relato web inbox list [--locale LOCALE] [--team-id ID] [--compact]
+  relato web forms list [--locale LOCALE] [--team-id ID] [--compact]
+  relato web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]
 
 Help topics:
   relato help payload
@@ -62,6 +70,7 @@ Help topics:
   relato help submit
   relato help fill
   relato help store
+  relato help web
 
 Safety:
   `--confirm` presses the native Submit button through Accessibility. It is not headless
@@ -72,6 +81,10 @@ Safety:
   activates it for menu selection, and the app is hidden after launch/fill.
   Snapshot attachments are staged into the local Feedback Assistant draft
   folder in the background after the native draft exists.
+
+  `relato web` is unofficial, read-only, and isolated from the stable native
+  workflow. Its endpoints may change without notice. It does not create drafts,
+  upload files, or submit feedback.
 ```
 
 To regenerate:
@@ -94,6 +107,12 @@ make generate-command-docs
 - `relato open-native [--payload PATH]`
 - `relato fill [--payload PATH] [--select-popups]`
 - `relato submit [--payload PATH] [--select-popups] [--wait-seconds N] [--verify-wait-seconds N] [--db PATH] [--confirm] [--verify-store] [--dry-run]`
+- `relato web auth login --apple-id EMAIL [--two-factor-code-command COMMAND]`
+- `relato web auth status`
+- `relato web auth logout`
+- `relato web inbox list [--locale LOCALE] [--team-id ID] [--compact]`
+- `relato web forms list [--locale LOCALE] [--team-id ID] [--compact]`
+- `relato web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]`
 
 ## Topic Help
 
@@ -263,6 +282,64 @@ Notes:
   and upload tasks, but they are not Apple server receipts.
 ```
 
+### `relato help web`
+
+```sh
+relato web: experimental read-only Feedback Assistant web access
+
+Status:
+  EXPERIMENTAL / UNOFFICIAL / READ-ONLY
+
+This command family uses Apple's undocumented Appleseed web service. It is
+separate from the public App Store Connect API and from ASC's private Iris API.
+Endpoints and response schemas can change without notice.
+
+Authentication:
+  relato web auth login --apple-id EMAIL [--two-factor-code-command COMMAND]
+    Performs Apple Account SRP authentication directly from Swift. The password
+    is read from a secure terminal prompt by default and is never stored.
+    Trusted-device and trusted-phone two-factor challenges are supported.
+    RelatoKit stores the resulting cookies and a one-way account hash in Keychain.
+
+  relato web auth status
+    Validates the cached session against Feedback Assistant.
+
+  relato web auth logout
+    Deletes the local Keychain session. It does not revoke Apple sessions.
+
+Login options and environment:
+  --apple-id EMAIL
+    Apple Account email. Defaults to RELATO_WEB_APPLE_ID.
+
+  --two-factor-code-command COMMAND
+    Runs COMMAND for each requested verification code and reads the code from
+    stdout. Defaults to RELATO_WEB_2FA_CODE_COMMAND. Without a command, an
+    interactive terminal prompt is used.
+
+  RELATO_WEB_PASSWORD
+    Supplies the password non-interactively. A secure terminal prompt is safer
+    for human use because environment variables may be exposed to child
+    processes or shell tooling.
+
+Headless boundary:
+  Password-based Apple Accounts, including trusted-device and trusted-phone 2FA,
+  can authenticate without WebKit, Chrome, or the ASC binary. Passkey-only
+  accounts and Apple Account actions that require a browser are not supported.
+
+Read-only commands:
+  relato web inbox list [--locale LOCALE] [--team-id ID] [--compact]
+  relato web forms list [--locale LOCALE] [--team-id ID] [--compact]
+  relato web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]
+
+Output:
+  JSON is pretty-printed by default for agent inspection.
+  --compact emits compact JSON.
+
+Boundaries:
+  This experiment does not create or edit drafts, upload attachments, answer
+  questions, or submit feedback. The stable native workflow is unchanged.
+```
+
 ## Scripting Tips
 
 - Use `relato submit --dry-run` before `--confirm` to preview the native handoff plan.
@@ -272,3 +349,5 @@ Notes:
 - Use `relato store summary` and `relato store list` for local verification after native submission.
 - Treat local store verification as local evidence, not an Apple server receipt.
 - `--select-popups` briefly activates Feedback Assistant to select native platform, area, and type menus.
+- Use `relato web auth status` before experimental read-only web requests.
+- Treat `relato web` response schemas as unstable and preserve raw JSON when debugging.
