@@ -312,6 +312,62 @@ struct FeedbackWebClientTests {
         )
         #expect(FeedbackWebMockURLProtocol.lastRequestBody == nil)
     }
+
+    @Test func updatesCompleteDraftAnswerSet() async throws {
+        defer {
+            FeedbackWebMockURLProtocol.handler = nil
+            FeedbackWebMockURLProtocol.lastRequest = nil
+            FeedbackWebMockURLProtocol.lastRequestBody = nil
+        }
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [FeedbackWebMockURLProtocol.self]
+        FeedbackWebMockURLProtocol.handler = { request in
+            let response = HTTPURLResponse(
+                url: try #require(request.url),
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            return (response, Data(#"{"answers":[],"items":{"upsert":[],"delete":[]}}"#.utf8))
+        }
+
+        let client = FeedbackWebClient(
+            session: FeedbackWebSession(cookies: []),
+            configuration: configuration
+        )
+        let data = try await client.updateDraftAnswers(
+            id: "104688952",
+            locale: "en",
+            answers: [
+                FeedbackWebAnswerMutation(questionID: 366028, values: ["Video input"]),
+                FeedbackWebAnswerMutation(questionID: 364164, ignoreRequired: true),
+            ]
+        )
+
+        #expect(
+            String(decoding: data, as: UTF8.self)
+                == #"{"answers":[],"items":{"upsert":[],"delete":[]}}"#
+        )
+        let request = try #require(FeedbackWebMockURLProtocol.lastRequest)
+        #expect(request.httpMethod == "PUT")
+        #expect(
+            request.url?.absoluteString
+                == "https://appleseed.apple.com/sp/en/feedback/form_responses/104688952/answers.json"
+        )
+        let body = try #require(FeedbackWebMockURLProtocol.lastRequestBody)
+        let object = try #require(
+            JSONSerialization.jsonObject(with: body) as? [String: Any]
+        )
+        let answers = try #require(object["answers"] as? [[String: Any]])
+        #expect(answers.count == 2)
+        #expect(answers[0]["question_id"] as? Int == 366028)
+        #expect(answers[0]["values"] as? [String] == ["Video input"])
+        #expect(answers[0]["ignore_required"] == nil)
+        #expect(answers[1]["question_id"] as? Int == 364164)
+        #expect(answers[1]["values"] == nil)
+        #expect(answers[1]["ignore_required"] as? Bool == true)
+    }
 }
 
 private final class FeedbackWebMockURLProtocol: URLProtocol, @unchecked Sendable {

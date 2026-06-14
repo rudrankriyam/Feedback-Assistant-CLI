@@ -144,6 +144,21 @@ public actor FeedbackWebClient {
         )
     }
 
+    public func updateDraftAnswers(
+        id: String,
+        locale: String = "en",
+        answers: [FeedbackWebAnswerMutation]
+    ) async throws -> Data {
+        let draftID = try pathSegment(id, name: "draft id")
+        let body = try JSONEncoder().encode(FeedbackWebAnswersPayload(answers: answers))
+        return try await request(
+            method: "PUT",
+            path: "\(validatedLocale(locale))/feedback/form_responses/\(draftID)/answers.json",
+            locale: locale,
+            body: body
+        )
+    }
+
     public func currentSession() -> FeedbackWebSession {
         session
     }
@@ -265,4 +280,8 @@ public actor FeedbackWebClient {
         }
         return locale
     }
+}
+
+private struct FeedbackWebAnswersPayload: Encodable {
+    let answers: [FeedbackWebAnswerMutation]
 }

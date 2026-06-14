@@ -28,7 +28,7 @@ relato: agent-first tooling for Apple Feedback Assistant workflows
 
 RelatoKit is designed for coding agents preparing useful Feedback Assistant
 reports. Its stable workflow uses Apple's native macOS app. The experimental
-`web` command family provides read-only access to Apple's undocumented
+`web` command family provides headless access to Apple's undocumented
 Feedback Assistant web service after an explicit Apple Account login.
 
 Agent workflow:
@@ -63,8 +63,10 @@ Commands:
   relato web inbox list [--locale LOCALE] [--team-id ID] [--compact]
   relato web forms list [--locale LOCALE] [--team-id ID] [--compact]
   relato web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]
+  relato web forms options --id ID [--tat TAT] [--locale LOCALE] [--team-id ID] [--compact]
   relato web drafts create --form-id ID [--locale LOCALE] [--team-id ID] [--compact]
   relato web drafts view --id ID [--locale LOCALE] [--compact]
+  relato web drafts update --id ID [--payload PATH] [field options] [--answer TAT=VALUE]... [--locale LOCALE] [--compact]
 
 Help topics:
   relato help payload
@@ -85,8 +87,9 @@ Safety:
   folder in the background after the native draft exists.
 
   `relato web` is unofficial and isolated from the stable native workflow.
-  Its endpoints may change without notice. Draft creation is supported, but
-  answer updates, attachment upload, and submission are not yet exposed.
+  Its endpoints may change without notice. Draft creation, inspection, and
+  schema-validated answer updates are supported. Attachment upload and final
+  web submission are not yet exposed.
 ```
 
 To regenerate:
@@ -115,8 +118,10 @@ make generate-command-docs
 - `relato web inbox list [--locale LOCALE] [--team-id ID] [--compact]`
 - `relato web forms list [--locale LOCALE] [--team-id ID] [--compact]`
 - `relato web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]`
+- `relato web forms options --id ID [--tat TAT] [--locale LOCALE] [--team-id ID] [--compact]`
 - `relato web drafts create --form-id ID [--locale LOCALE] [--team-id ID] [--compact]`
 - `relato web drafts view --id ID [--locale LOCALE] [--compact]`
+- `relato web drafts update --id ID [--payload PATH] [field options] [--answer TAT=VALUE]... [--locale LOCALE] [--compact]`
 
 ## Topic Help
 
@@ -334,6 +339,9 @@ Inspection commands:
   relato web inbox list [--locale LOCALE] [--team-id ID] [--compact]
   relato web forms list [--locale LOCALE] [--team-id ID] [--compact]
   relato web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]
+  relato web forms options --id ID [--tat TAT] [--locale LOCALE] [--team-id ID] [--compact]
+    Emits normalized question metadata and label/value pairs. Use --tat to
+    inspect one semantic field, such as :platform or :area.
 
 Draft commands:
   relato web drafts create --form-id ID [--locale LOCALE] [--team-id ID] [--compact]
@@ -344,13 +352,33 @@ Draft commands:
     Reads a server-backed draft, including its form ID, saved answers, and
     attachment records.
 
+  relato web drafts update --id ID [--payload PATH] [field options] [--answer TAT=VALUE]... [--locale LOCALE] [--compact]
+    Fetches the current draft and form schema, preserves untouched answers,
+    resolves choice labels to Apple's values, validates text limits, and saves
+    the complete answer set.
+
+    Named field options:
+      --title TEXT
+      --platform VALUE
+      --technology LABEL_OR_VALUE
+      --kind bug|suggestion
+      --description TEXT
+      --app TEXT
+      --impact TEXT
+      --foundation-models-mode feedback|samples|APPLE_VALUE
+
+    --payload imports title, description, platform, category area, and kind
+    from a `relato prepare` JSON payload. Explicit named options override it.
+    Repeat --answer TAT=VALUE for conditional or form-specific questions.
+    Repeating the same TAT supplies multiple checkbox values.
+
 Output:
   JSON is pretty-printed by default for agent inspection.
   --compact emits compact JSON.
 
 Boundaries:
-  This experiment creates drafts but does not yet edit answers, upload
-  attachments, or submit feedback. The stable native workflow is unchanged.
+  This experiment creates, reads, and edits drafts. It does not yet upload
+  attachments or submit feedback. The stable native workflow is unchanged.
 ```
 
 ## Scripting Tips

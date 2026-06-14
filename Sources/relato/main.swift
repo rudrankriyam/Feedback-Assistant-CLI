@@ -185,24 +185,38 @@ enum RelatoCLI {
     static func runWebForms(_ rawArguments: [String]) async throws {
         var arguments = rawArguments
         guard !arguments.isEmpty else {
-            throw RelatoError.invalidArgument("web forms requires a subcommand: list, view")
+            throw RelatoError.invalidArgument("web forms requires a subcommand: list, view, options")
         }
 
         let subcommand = arguments.removeFirst()
         let locale = try takeOption("--locale", from: &arguments) ?? "en"
         let teamID = try takeOption("--team-id", from: &arguments)
         let compact = takeFlag("--compact", from: &arguments)
-        let client = try makeFeedbackWebClient()
 
         let data: Data
         switch subcommand {
         case "list":
             try ensureNoArguments(arguments)
+            let client = try makeFeedbackWebClient()
             data = try await client.formItems(locale: locale, teamID: teamID)
         case "view":
             let id = try requireOption("--id", from: &arguments)
             try ensureNoArguments(arguments)
+            let client = try makeFeedbackWebClient()
             data = try await client.form(id: id, locale: locale, teamID: teamID)
+        case "options":
+            let id = try requireOption("--id", from: &arguments)
+            let tat = try takeOption("--tat", from: &arguments)
+            try ensureNoArguments(arguments)
+            let client = try makeFeedbackWebClient()
+            data = try await client.form(id: id, locale: locale, teamID: teamID)
+            let form = try decodeWebJSON(
+                FeedbackWebFormSchema.self,
+                from: data,
+                name: "form schema"
+            )
+            try printJSON(form.options(tat: tat), pretty: !compact)
+            return
         default:
             throw RelatoError.invalidArgument("Unknown web forms subcommand: \(subcommand)")
         }
@@ -212,13 +226,12 @@ enum RelatoCLI {
     static func runWebDrafts(_ rawArguments: [String]) async throws {
         var arguments = rawArguments
         guard !arguments.isEmpty else {
-            throw RelatoError.invalidArgument("web drafts requires a subcommand: create, view")
+            throw RelatoError.invalidArgument("web drafts requires a subcommand: create, view, update")
         }
 
         let subcommand = arguments.removeFirst()
         let locale = try takeOption("--locale", from: &arguments) ?? "en"
         let compact = takeFlag("--compact", from: &arguments)
-        let client = try makeFeedbackWebClient()
 
         let data: Data
         switch subcommand {
@@ -226,6 +239,7 @@ enum RelatoCLI {
             let formID = try requireOption("--form-id", from: &arguments)
             let teamID = try takeOption("--team-id", from: &arguments)
             try ensureNoArguments(arguments)
+            let client = try makeFeedbackWebClient()
             data = try await client.createDraft(
                 formID: formID,
                 locale: locale,
@@ -234,7 +248,40 @@ enum RelatoCLI {
         case "view":
             let id = try requireOption("--id", from: &arguments)
             try ensureNoArguments(arguments)
+            let client = try makeFeedbackWebClient()
             data = try await client.draft(id: id, locale: locale)
+        case "update":
+            let id = try requireOption("--id", from: &arguments)
+            let updates = try webDraftUpdates(from: &arguments)
+            try ensureNoArguments(arguments)
+
+            let client = try makeFeedbackWebClient()
+            let draftData = try await client.draft(id: id, locale: locale)
+            let draft = try decodeWebJSON(
+                FeedbackWebDraft.self,
+                from: draftData,
+                name: "draft"
+            )
+            let formData = try await client.form(
+                id: String(draft.formID),
+                locale: locale,
+                teamID: draft.teamID
+            )
+            let form = try decodeWebJSON(
+                FeedbackWebFormSchema.self,
+                from: formData,
+                name: "form schema"
+            )
+            let answers = try FeedbackWebDraftEditor.mergedAnswers(
+                draft: draft,
+                form: form,
+                updates: updates
+            )
+            data = try await client.updateDraftAnswers(
+                id: id,
+                locale: locale,
+                answers: answers
+            )
         default:
             throw RelatoError.invalidArgument("Unknown web drafts subcommand: \(subcommand)")
         }
@@ -247,6 +294,87 @@ enum RelatoCLI {
             throw FeedbackWebClientError.authenticationRequired
         }
         return FeedbackWebClient(session: session, sessionStore: store)
+    }
+
+    static func webDraftUpdates(from arguments: inout [String]) throws -> [String: [String]] {
+        var updates: [String: [String]] = [:]
+
+        func set(_ tat: String, _ value: String?) {
+            guard let value else { return }
+            updates[tat] = [value]
+        }
+
+        if let payloadPath = try takeOption("--payload", from: &arguments) {
+            let payload = try loadPayload(at: expandedPath(payloadPath))
+            set(":title", payload.title)
+            set(":description", payload.description)
+            set(":platform", payload.platform)
+            set(":area", payload.category.area)
+            set(":type_req", try webFeedbackType(payload.kind.rawValue))
+        }
+
+        set(":title", try takeOption("--title", from: &arguments))
+        set(":platform", try takeOption("--platform", from: &arguments))
+        set(":area", try takeOption("--technology", from: &arguments))
+        if let kind = try takeOption("--kind", from: &arguments) {
+            set(":type_req", try webFeedbackType(kind))
+        }
+        set(":description", try takeOption("--description", from: &arguments))
+        set(":dev_app_name", try takeOption("--app", from: &arguments))
+        set(":dev_impact", try takeOption("--impact", from: &arguments))
+        if let mode = try takeOption("--foundation-models-mode", from: &arguments) {
+            let value: String
+            switch mode.lowercased() {
+            case "feedback":
+                value = "Share specific feedback"
+            case "samples":
+                value = "Upload model response samples"
+            default:
+                value = mode
+            }
+            set(":foundationmodels_type", value)
+        }
+
+        var customUpdates: [String: [String]] = [:]
+        for assignment in try takeOptions("--answer", from: &arguments) {
+            guard let separator = assignment.firstIndex(of: "=") else {
+                throw RelatoError.invalidArgument(
+                    "Invalid --answer value: \(assignment). Expected TAT=VALUE"
+                )
+            }
+            let tat = String(assignment[..<separator])
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let value = String(assignment[assignment.index(after: separator)...])
+            guard !tat.isEmpty, !value.isEmpty else {
+                throw RelatoError.invalidArgument(
+                    "Invalid --answer value: \(assignment). Expected non-empty TAT=VALUE"
+                )
+            }
+            customUpdates[tat, default: []].append(value)
+        }
+        for (tat, values) in customUpdates {
+            updates[tat] = values
+        }
+
+        guard !updates.isEmpty else {
+            throw RelatoError.invalidArgument(
+                "web drafts update requires --payload, a named field option, or --answer TAT=VALUE"
+            )
+        }
+        return updates
+    }
+
+    static func webFeedbackType(_ value: String) throws -> String {
+        switch value.lowercased() {
+        case "bug", "incorrect", "incorrect/unexpected behavior":
+            return "Incorrect/Unexpected Behavior"
+        case "suggestion":
+            return "Suggestion"
+        default:
+            throw RelatoError.invalidArgument(
+                "Invalid value for --kind: \(value). Expected bug or suggestion."
+            )
+        }
     }
 
     static func runStore(_ rawArguments: [String]) throws {
@@ -495,6 +623,18 @@ enum RelatoCLI {
         return arguments.remove(at: index)
     }
 
+    static func takeOptions(_ name: String, from arguments: inout [String]) throws -> [String] {
+        var values: [String] = []
+        while let index = arguments.firstIndex(of: name) {
+            arguments.remove(at: index)
+            guard index < arguments.count, !arguments[index].hasPrefix("--") else {
+                throw RelatoError.missingValue(name)
+            }
+            values.append(arguments.remove(at: index))
+        }
+        return values
+    }
+
     static func requireOption(_ name: String, from arguments: inout [String]) throws -> String {
         guard let value = try takeOption(name, from: &arguments), !value.isEmpty else {
             throw RelatoError.missingValue(name)
@@ -651,11 +791,25 @@ enum RelatoCLI {
         NSString(string: path).expandingTildeInPath
     }
 
-    static func printJSON<T: Encodable>(_ value: T) throws {
+    static func printJSON<T: Encodable>(_ value: T, pretty: Bool = true) throws {
         let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.outputFormatting = pretty ? [.prettyPrinted, .sortedKeys] : [.sortedKeys]
         let data = try encoder.encode(value)
         print(String(decoding: data, as: UTF8.self))
+    }
+
+    static func decodeWebJSON<T: Decodable>(
+        _ type: T.Type,
+        from data: Data,
+        name: String
+    ) throws -> T {
+        do {
+            return try JSONDecoder().decode(type, from: data)
+        } catch {
+            throw RelatoError.web(
+                "could not decode Apple's \(name) response: \(friendlyDecodeError(error))"
+            )
+        }
     }
 
     static func decodeJSONObject(_ data: Data) throws -> Any {
@@ -797,7 +951,7 @@ enum RelatoCLI {
 
             RelatoKit is designed for coding agents preparing useful Feedback Assistant
             reports. Its stable workflow uses Apple's native macOS app. The experimental
-            `web` command family provides read-only access to Apple's undocumented
+            `web` command family provides headless access to Apple's undocumented
             Feedback Assistant web service after an explicit Apple Account login.
 
             Agent workflow:
@@ -832,8 +986,10 @@ enum RelatoCLI {
               relato web inbox list [--locale LOCALE] [--team-id ID] [--compact]
               relato web forms list [--locale LOCALE] [--team-id ID] [--compact]
               relato web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]
+              relato web forms options --id ID [--tat TAT] [--locale LOCALE] [--team-id ID] [--compact]
               relato web drafts create --form-id ID [--locale LOCALE] [--team-id ID] [--compact]
               relato web drafts view --id ID [--locale LOCALE] [--compact]
+              relato web drafts update --id ID [--payload PATH] [field options] [--answer TAT=VALUE]... [--locale LOCALE] [--compact]
 
             Help topics:
               relato help payload
@@ -854,8 +1010,9 @@ enum RelatoCLI {
               folder in the background after the native draft exists.
 
               `relato web` is unofficial and isolated from the stable native workflow.
-              Its endpoints may change without notice. Draft creation is supported, but
-              answer updates, attachment upload, and submission are not yet exposed.
+              Its endpoints may change without notice. Draft creation, inspection, and
+              schema-validated answer updates are supported. Attachment upload and final
+              web submission are not yet exposed.
             """
         )
     }
@@ -1040,6 +1197,9 @@ enum RelatoCLI {
               relato web inbox list [--locale LOCALE] [--team-id ID] [--compact]
               relato web forms list [--locale LOCALE] [--team-id ID] [--compact]
               relato web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]
+              relato web forms options --id ID [--tat TAT] [--locale LOCALE] [--team-id ID] [--compact]
+                Emits normalized question metadata and label/value pairs. Use --tat to
+                inspect one semantic field, such as :platform or :area.
 
             Draft commands:
               relato web drafts create --form-id ID [--locale LOCALE] [--team-id ID] [--compact]
@@ -1050,13 +1210,33 @@ enum RelatoCLI {
                 Reads a server-backed draft, including its form ID, saved answers, and
                 attachment records.
 
+              relato web drafts update --id ID [--payload PATH] [field options] [--answer TAT=VALUE]... [--locale LOCALE] [--compact]
+                Fetches the current draft and form schema, preserves untouched answers,
+                resolves choice labels to Apple's values, validates text limits, and saves
+                the complete answer set.
+
+                Named field options:
+                  --title TEXT
+                  --platform VALUE
+                  --technology LABEL_OR_VALUE
+                  --kind bug|suggestion
+                  --description TEXT
+                  --app TEXT
+                  --impact TEXT
+                  --foundation-models-mode feedback|samples|APPLE_VALUE
+
+                --payload imports title, description, platform, category area, and kind
+                from a `relato prepare` JSON payload. Explicit named options override it.
+                Repeat --answer TAT=VALUE for conditional or form-specific questions.
+                Repeating the same TAT supplies multiple checkbox values.
+
             Output:
               JSON is pretty-printed by default for agent inspection.
               --compact emits compact JSON.
 
             Boundaries:
-              This experiment creates drafts but does not yet edit answers, upload
-              attachments, or submit feedback. The stable native workflow is unchanged.
+              This experiment creates, reads, and edits drafts. It does not yet upload
+              attachments or submit feedback. The stable native workflow is unchanged.
             """
         )
     }
