@@ -134,6 +134,34 @@ import Testing
     #expect(decoded.cookies == cached.cookies)
 }
 
+@Test func webSessionStoreHandlesConcurrentInitialSaves() async throws {
+    let store = FeedbackWebSessionStore(
+        service: "com.rryam.RelatoKit.tests.\(UUID().uuidString)"
+    )
+    defer { try? store.delete() }
+
+    try await withThrowingTaskGroup(of: Void.self) { group in
+        for index in 0..<16 {
+            group.addTask {
+                try store.save(
+                    FeedbackWebSession(cookies: [
+                        FeedbackWebCookie(
+                            name: "session",
+                            value: "\(index)",
+                            domain: ".apple.com"
+                        )
+                    ])
+                )
+            }
+        }
+        try await group.waitForAll()
+    }
+
+    let loaded = try store.load()
+    let saved = try #require(loaded)
+    #expect(saved.cookies.count == 1)
+}
+
 @Suite(.serialized)
 struct FeedbackWebClientTests {
     @Test func usesAppleseedHeadersAndRefreshesSession() async throws {

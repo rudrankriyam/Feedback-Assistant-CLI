@@ -1,4 +1,5 @@
 import CryptoKit
+import Darwin
 import Foundation
 import Security
 
@@ -177,23 +178,25 @@ public struct FeedbackWebSessionStore: Sendable {
     }
 
     public func load() throws -> FeedbackWebSession? {
-        var query = baseQuery
-        query[kSecReturnData as String] = true
-        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        try withKeychainLock {
+            var query = baseQuery
+            query[kSecReturnData as String] = true
+            query[kSecMatchLimit as String] = kSecMatchLimitOne
 
-        var item: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &item)
-        if status == errSecItemNotFound {
-            return nil
-        }
-        guard status == errSecSuccess, let data = item as? Data else {
-            throw keychainError(operation: "load", status: status)
-        }
+            var item: CFTypeRef?
+            let status = SecItemCopyMatching(query as CFDictionary, &item)
+            if status == errSecItemNotFound {
+                return nil
+            }
+            guard status == errSecSuccess, let data = item as? Data else {
+                throw keychainError(operation: "load", status: status)
+            }
 
-        do {
-            return try JSONDecoder().decode(FeedbackWebSession.self, from: data)
-        } catch {
-            throw RelatoError.web("could not decode the cached web session")
+            do {
+                return try JSONDecoder().decode(FeedbackWebSession.self, from: data)
+            } catch {
+                throw RelatoError.web("could not decode the cached web session")
+            }
         }
     }
 
@@ -205,30 +208,45 @@ public struct FeedbackWebSessionStore: Sendable {
             throw RelatoError.web("could not encode the web session")
         }
 
-        var query = baseQuery
-        let updateAttributes: [String: Any] = [
-            kSecValueData as String: data
-        ]
-        let status = SecItemUpdate(query as CFDictionary, updateAttributes as CFDictionary)
-        if status == errSecSuccess {
-            return
-        }
-        if status != errSecItemNotFound {
-            throw keychainError(operation: "update", status: status)
-        }
+        try withKeychainLock {
+            var query = baseQuery
+            let updateAttributes: [String: Any] = [
+                kSecValueData as String: data
+            ]
+            let status = SecItemUpdate(query as CFDictionary, updateAttributes as CFDictionary)
+            if status == errSecSuccess {
+                return
+            }
+            if status != errSecItemNotFound {
+                throw keychainError(operation: "update", status: status)
+            }
 
-        query.merge(updateAttributes) { _, new in new }
-        query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        let addStatus = SecItemAdd(query as CFDictionary, nil)
-        guard addStatus == errSecSuccess else {
+            query.merge(updateAttributes) { _, new in new }
+            query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            let addStatus = SecItemAdd(query as CFDictionary, nil)
+            if addStatus == errSecSuccess {
+                return
+            }
+            if addStatus == errSecDuplicateItem {
+                let retryStatus = SecItemUpdate(
+                    baseQuery as CFDictionary,
+                    updateAttributes as CFDictionary
+                )
+                guard retryStatus == errSecSuccess else {
+                    throw keychainError(operation: "update", status: retryStatus)
+                }
+                return
+            }
             throw keychainError(operation: "save", status: addStatus)
         }
     }
 
     public func delete() throws {
-        let status = SecItemDelete(baseQuery as CFDictionary)
-        guard status == errSecSuccess || status == errSecItemNotFound else {
-            throw keychainError(operation: "delete", status: status)
+        try withKeychainLock {
+            let status = SecItemDelete(baseQuery as CFDictionary)
+            guard status == errSecSuccess || status == errSecItemNotFound else {
+                throw keychainError(operation: "delete", status: status)
+            }
         }
     }
 
@@ -240,8 +258,44 @@ public struct FeedbackWebSessionStore: Sendable {
         ]
     }
 
+    private var lockURL: URL {
+        let identifier = Data(SHA256.hash(data: Data("\(service)\n\(account)".utf8)))
+            .map { String(format: "%02x", $0) }
+            .joined()
+        return FileManager.default.temporaryDirectory
+            .appendingPathComponent("relato-feedback-web-session-\(identifier).lock")
+    }
+
+    private func withKeychainLock<T>(_ operation: () throws -> T) throws -> T {
+        let descriptor = Darwin.open(
+            lockURL.path,
+            O_CREAT | O_RDWR,
+            S_IRUSR | S_IWUSR
+        )
+        guard descriptor >= 0 else {
+            throw lockError(operation: "open")
+        }
+        defer {
+            _ = Darwin.lockf(descriptor, F_ULOCK, 0)
+            _ = Darwin.close(descriptor)
+        }
+
+        while Darwin.lockf(descriptor, F_LOCK, 0) != 0 {
+            if errno == EINTR {
+                continue
+            }
+            throw lockError(operation: "acquire")
+        }
+        return try operation()
+    }
+
     private func keychainError(operation: String, status: OSStatus) -> RelatoError {
         let message = SecCopyErrorMessageString(status, nil) as String? ?? "status \(status)"
         return .web("could not \(operation) Keychain session: \(message)")
+    }
+
+    private func lockError(operation: String) -> RelatoError {
+        let message = String(cString: strerror(errno))
+        return .web("could not \(operation) Keychain session lock: \(message)")
     }
 }
