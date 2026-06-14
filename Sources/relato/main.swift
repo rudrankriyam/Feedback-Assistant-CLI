@@ -1125,7 +1125,8 @@ enum RelatoCLI {
               Its endpoints may change without notice. Draft creation, inspection, and
               schema-validated answer updates are supported. Attachment upload uses
               Apple's file-promise protocol and verifies the result from the draft.
-              Final web submission is not yet exposed.
+              Confirmed submission verifies the resulting feedback ID through Apple's
+              feedback-detail endpoint.
             """
         )
     }

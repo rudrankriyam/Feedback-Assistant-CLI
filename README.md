@@ -275,14 +275,14 @@ RelatoKit keeps the stable native workflow separate from the experimental web wo
 
 - `relato submit --confirm` presses the native Submit button through Accessibility.
 - Local store verification is local evidence only. It can show drafts, recent items, and upload-task changes, but it is not an Apple server receipt.
-- Private FeedbackCore and feedbackd APIs are research-only and are not used by the shipping CLI.
+- Private FeedbackCore and feedbackd APIs are not used by the shipping CLI.
 - Experimental `relato web` commands use password-based Apple SRP authentication and keep only the resulting session. File storage is owner-only by default; Keychain storage is opt-in.
 - `relato web drafts submit --confirm` uses Apple's undocumented Appleseed service and verifies the returned feedback ID through a server read.
 - RelatoKit does not bypass entitlements, forge Apple credentials, patch platform security, or redistribute Apple private headers.
 
 ## Maturity
 
-RelatoKit is pre-1.0. The stable surface is report preparation, local store inspection, native route launch, text-field fill, native popup selection, local attachment staging, explicit native submit handoff, and best-effort local verification. The `relato web` command family is experimental. Research probes live under `Research/` and are not part of the SwiftPM build.
+RelatoKit is pre-1.0. The stable surface is report preparation, local store inspection, native route launch, text-field fill, native popup selection, local attachment staging, explicit native submit handoff, and best-effort local verification. The `relato web` command family is experimental.
 
 ## Non-Goals
 

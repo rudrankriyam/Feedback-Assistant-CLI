@@ -33,18 +33,6 @@ public enum FeedbackWebClientError: Error, CustomStringConvertible, Equatable {
     }
 }
 
-final class FeedbackWebRedirectDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
-    func urlSession(
-        _ session: URLSession,
-        task: URLSessionTask,
-        willPerformHTTPRedirection response: HTTPURLResponse,
-        newRequest request: URLRequest,
-        completionHandler: @escaping (URLRequest?) -> Void
-    ) {
-        completionHandler(nil)
-    }
-}
-
 public actor FeedbackWebClient {
     private var session: FeedbackWebSession
     private let sessionStore: FeedbackWebSessionStore?
@@ -55,16 +43,9 @@ public actor FeedbackWebClient {
         sessionStore: FeedbackWebSessionStore? = nil,
         configuration: URLSessionConfiguration = .ephemeral
     ) {
-        let isolatedConfiguration = configuration.copy() as! URLSessionConfiguration
-        isolatedConfiguration.httpShouldSetCookies = false
-        isolatedConfiguration.requestCachePolicy = .reloadIgnoringLocalCacheData
         self.session = session
         self.sessionStore = sessionStore
-        self.urlSession = URLSession(
-            configuration: isolatedConfiguration,
-            delegate: FeedbackWebRedirectDelegate(),
-            delegateQueue: nil
-        )
+        self.urlSession = FeedbackWebHTTP.makeSession(configuration: configuration)
     }
 
     public func authenticate(locale: String = "en") async throws -> Data {
@@ -405,7 +386,7 @@ public actor FeedbackWebClient {
             FeedbackWebAPI.webBase.absoluteString + "/",
             forHTTPHeaderField: "Referer"
         )
-        request.setValue("RelatoKit/experimental-web", forHTTPHeaderField: "User-Agent")
+        request.setValue(FeedbackWebHTTP.userAgent, forHTTPHeaderField: "User-Agent")
         if let cookieHeader = session.cookieHeader(for: url) {
             request.setValue(cookieHeader, forHTTPHeaderField: "Cookie")
         }
@@ -431,7 +412,7 @@ public actor FeedbackWebClient {
         }
 
         let responseCookies = HTTPCookie.cookies(
-            withResponseHeaderFields: responseHeaderFields(response),
+            withResponseHeaderFields: FeedbackWebHTTP.responseHeaderFields(response),
             for: url
         )
         if !responseCookies.isEmpty {
@@ -445,15 +426,6 @@ public actor FeedbackWebClient {
             }
         }
         return data
-    }
-
-    private func responseHeaderFields(_ response: HTTPURLResponse) -> [String: String] {
-        response.allHeaderFields.reduce(into: [:]) { result, pair in
-            guard let key = pair.key as? String, let value = pair.value as? String else {
-                return
-            }
-            result[key] = value
-        }
     }
 
     private func updateFilePromise(
