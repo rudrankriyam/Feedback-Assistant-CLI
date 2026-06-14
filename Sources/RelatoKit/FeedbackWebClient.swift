@@ -83,6 +83,18 @@ public actor FeedbackWebClient {
         return try await request(method: "GET", path: path, locale: locale)
     }
 
+    public func feedback(
+        id: String,
+        locale: String = "en"
+    ) async throws -> Data {
+        let feedbackID = try pathSegment(id, name: "feedback id")
+        return try await request(
+            method: "GET",
+            path: "feedback/feedback_details/feedback/\(feedbackID)",
+            locale: locale
+        )
+    }
+
     public func formItems(
         locale: String = "en",
         teamID: String? = nil

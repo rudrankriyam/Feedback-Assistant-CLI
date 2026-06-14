@@ -313,6 +313,50 @@ struct FeedbackWebClientTests {
         #expect(FeedbackWebMockURLProtocol.lastRequestBody == nil)
     }
 
+    @Test func readsSubmittedFeedbackDetails() async throws {
+        defer {
+            FeedbackWebMockURLProtocol.handler = nil
+            FeedbackWebMockURLProtocol.lastRequest = nil
+            FeedbackWebMockURLProtocol.lastRequestBody = nil
+        }
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [FeedbackWebMockURLProtocol.self]
+        FeedbackWebMockURLProtocol.handler = { request in
+            let response = HTTPURLResponse(
+                url: try #require(request.url),
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            return (
+                response,
+                Data(
+                    #"{"id":23049003,"form_response_id":103969139,"items":{"upsert":[{"id":23049003,"type":"FEEDBACK"}]}}"#
+                        .utf8
+                )
+            )
+        }
+
+        let client = FeedbackWebClient(
+            session: FeedbackWebSession(cookies: []),
+            configuration: configuration
+        )
+        let data = try await client.feedback(id: "23049003", locale: "en")
+
+        #expect(
+            String(decoding: data, as: UTF8.self)
+                == #"{"id":23049003,"form_response_id":103969139,"items":{"upsert":[{"id":23049003,"type":"FEEDBACK"}]}}"#
+        )
+        let request = try #require(FeedbackWebMockURLProtocol.lastRequest)
+        #expect(request.httpMethod == "GET")
+        #expect(
+            request.url?.absoluteString
+                == "https://appleseed.apple.com/sp/feedback/feedback_details/feedback/23049003"
+        )
+        #expect(FeedbackWebMockURLProtocol.lastRequestBody == nil)
+    }
+
     @Test func updatesCompleteDraftAnswerSet() async throws {
         defer {
             FeedbackWebMockURLProtocol.handler = nil

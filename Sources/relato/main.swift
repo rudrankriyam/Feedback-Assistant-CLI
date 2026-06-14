@@ -79,6 +79,8 @@ enum RelatoCLI {
             try await runWebAuth(arguments)
         case "inbox":
             try await runWebInbox(arguments)
+        case "feedback":
+            try await runWebFeedback(arguments)
         case "forms":
             try await runWebForms(arguments)
         case "drafts":
@@ -179,6 +181,28 @@ enum RelatoCLI {
 
         let client = try makeFeedbackWebClient()
         let data = try await client.contentItems(locale: locale, teamID: teamID)
+        try printJSONData(data, pretty: !compact)
+    }
+
+    static func runWebFeedback(_ rawArguments: [String]) async throws {
+        var arguments = rawArguments
+        guard !arguments.isEmpty else {
+            throw RelatoError.invalidArgument("web feedback requires the view subcommand")
+        }
+        let subcommand = arguments.removeFirst()
+        guard subcommand == "view" else {
+            throw RelatoError.invalidArgument(
+                "Unknown web feedback subcommand: \(subcommand)"
+            )
+        }
+
+        let id = try requireOption("--id", from: &arguments)
+        let locale = try takeOption("--locale", from: &arguments) ?? "en"
+        let compact = takeFlag("--compact", from: &arguments)
+        try ensureNoArguments(arguments)
+
+        let client = try makeFeedbackWebClient()
+        let data = try await client.feedback(id: id, locale: locale)
         try printJSONData(data, pretty: !compact)
     }
 
@@ -1025,6 +1049,7 @@ enum RelatoCLI {
               relato web auth status
               relato web auth logout
               relato web inbox list [--locale LOCALE] [--team-id ID] [--compact]
+              relato web feedback view --id ID [--locale LOCALE] [--compact]
               relato web forms list [--locale LOCALE] [--team-id ID] [--compact]
               relato web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]
               relato web forms options --id ID [--tat TAT] [--locale LOCALE] [--team-id ID] [--compact]
@@ -1238,6 +1263,10 @@ enum RelatoCLI {
 
             Inspection commands:
               relato web inbox list [--locale LOCALE] [--team-id ID] [--compact]
+              relato web feedback view --id ID [--locale LOCALE] [--compact]
+                Reads Apple's server-backed feedback detail envelope, including the
+                submitted feedback ID and originating form-response ID.
+
               relato web forms list [--locale LOCALE] [--team-id ID] [--compact]
               relato web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]
               relato web forms options --id ID [--tat TAT] [--locale LOCALE] [--team-id ID] [--compact]
