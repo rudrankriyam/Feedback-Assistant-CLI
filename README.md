@@ -1,13 +1,19 @@
-# xcfb
+# Feedback Assistant CLI
 
-[![CI](https://github.com/rryam/xcfb/actions/workflows/ci.yml/badge.svg)](https://github.com/rryam/xcfb/actions/workflows/ci.yml)
+[![CI](https://github.com/rudrankriyam/Feedback-Assistant-CLI/actions/workflows/ci.yml/badge.svg)](https://github.com/rudrankriyam/Feedback-Assistant-CLI/actions/workflows/ci.yml)
 [![Swift](https://img.shields.io/badge/Swift-6.0+-fa7343?style=flat&logo=swift&logoColor=white)](https://swift.org)
 [![Platform](https://img.shields.io/badge/macOS-14.0+-000000?style=flat&logo=apple&logoColor=white)](https://developer.apple.com/macos/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-Agent-first CLI for Apple Feedback Assistant workflows on macOS.
+> [!IMPORTANT]
+> `xcfb` is a community-defined name and an unofficial tool. It is not an
+> Apple command or product, and it is not affiliated with or endorsed by Apple.
 
-xcfb prepares, files, and verifies Feedback Assistant reports. It can inspect the local Feedback Assistant store, generate structured report payloads, drive Apple's native app through Accessibility, and use an experimental authenticated web workflow for server-backed drafts and confirmed submission.
+`xcfb` is an agent-first command-line toolkit for Apple Feedback Assistant
+workflows on macOS. It prepares, files, and verifies reports; inspects the local
+Feedback Assistant store; drives Apple's native app through Accessibility; and
+provides an experimental authenticated web workflow for server-backed drafts
+and confirmed submission.
 
 xcfb is distributed only as an executable. Its Swift package manifest is the build definition for the CLI and exports no library product.
 
@@ -40,8 +46,8 @@ xcfb submit --payload feedback-submission.json --select-popups
 Build from source:
 
 ```sh
-git clone https://github.com/rryam/xcfb.git
-cd xcfb
+git clone https://github.com/rudrankriyam/Feedback-Assistant-CLI.git
+cd Feedback-Assistant-CLI
 swift build -c release
 .build/release/xcfb --help
 .build/release/xcfb version
