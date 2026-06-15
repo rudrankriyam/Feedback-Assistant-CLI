@@ -175,7 +175,7 @@ public final class FeedbackStore {
                 """
             )
             guard let draftID = rows.first?.first, !draftID.isEmpty else {
-                throw RelatoError.sqlite("Could not find a current Feedback Assistant draft")
+                throw XCFBError.sqlite("Could not find a current Feedback Assistant draft")
             }
             return draftID
         }
@@ -183,7 +183,7 @@ public final class FeedbackStore {
 
     private func withDatabase<T>(_ body: (SQLiteDatabase) throws -> T) throws -> T {
         guard FileManager.default.fileExists(atPath: path) else {
-            throw RelatoError.missingFile(path)
+            throw XCFBError.missingFile(path)
         }
         let db = try SQLiteDatabase(path: path)
         return try body(db)
@@ -201,7 +201,7 @@ public enum FeedbackDraftAttachmentStager {
     ) throws -> DraftAttachment {
         let source = URL(fileURLWithPath: NSString(string: snapshotPath).expandingTildeInPath).standardizedFileURL
         guard FileManager.default.fileExists(atPath: source.path) else {
-            throw RelatoError.missingFile(source.path)
+            throw XCFBError.missingFile(source.path)
         }
 
         let draftID = try preferredDraftID ?? FeedbackStore(path: storePath).newestDraftID()
@@ -242,7 +242,7 @@ private final class SQLiteDatabase {
         let result = sqlite3_open_v2(uri, &handle, SQLITE_OPEN_READONLY | SQLITE_OPEN_URI, nil)
         guard result == SQLITE_OK else {
             let message = handle.map { String(cString: sqlite3_errmsg($0)) } ?? "could not open database"
-            throw RelatoError.sqlite(message)
+            throw XCFBError.sqlite(message)
         }
         try execute("PRAGMA query_only = ON")
     }
@@ -257,7 +257,7 @@ private final class SQLiteDatabase {
         guard result == SQLITE_OK else {
             let message = error.map { String(cString: $0) } ?? lastError
             sqlite3_free(error)
-            throw RelatoError.sqlite(message)
+            throw XCFBError.sqlite(message)
         }
     }
 
@@ -269,7 +269,7 @@ private final class SQLiteDatabase {
     func rows(_ sql: String, bindings: [SQLiteBinding] = []) throws -> [[String]] {
         var statement: OpaquePointer?
         guard sqlite3_prepare_v2(handle, sql, -1, &statement, nil) == SQLITE_OK else {
-            throw RelatoError.sqlite(lastError)
+            throw XCFBError.sqlite(lastError)
         }
         defer { sqlite3_finalize(statement) }
 
@@ -296,7 +296,7 @@ private final class SQLiteDatabase {
             } else if step == SQLITE_DONE {
                 return output
             } else {
-                throw RelatoError.sqlite(lastError)
+                throw XCFBError.sqlite(lastError)
             }
         }
     }

@@ -1,6 +1,6 @@
 import Foundation
 
-public enum RelatoError: Error, CustomStringConvertible {
+public enum XCFBError: Error, CustomStringConvertible {
     case missingValue(String)
     case invalidArgument(String)
     case missingFile(String)

@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import RelatoKit
+@testable import XCFBCore
 
 @Test func webFormOptionsNormalizeChoiceLabelsAndValues() throws {
     let form = try JSONDecoder().decode(
@@ -75,14 +75,14 @@ import Testing
         from: Data(testDraftJSON.utf8)
     )
 
-    #expect(throws: RelatoError.self) {
+    #expect(throws: XCFBError.self) {
         try FeedbackWebDraftEditor.mergedAnswers(
             draft: draft,
             form: form,
             updates: [":platform": ["NewtonOS"]]
         )
     }
-    #expect(throws: RelatoError.self) {
+    #expect(throws: XCFBError.self) {
         try FeedbackWebDraftEditor.mergedAnswers(
             draft: draft,
             form: form,

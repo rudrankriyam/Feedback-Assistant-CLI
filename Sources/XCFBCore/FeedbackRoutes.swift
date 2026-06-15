@@ -18,16 +18,16 @@ public enum FeedbackRoutes {
 
     public static func url(for route: String, id: String? = nil) throws -> URL {
         guard var path = known[route] else {
-            throw RelatoError.invalidArgument("Unknown route: \(route)")
+            throw XCFBError.invalidArgument("Unknown route: \(route)")
         }
         if path.contains("{id}") {
             guard let id, !id.isEmpty else {
-                throw RelatoError.invalidArgument("\(route) requires --id")
+                throw XCFBError.invalidArgument("\(route) requires --id")
             }
             path = path.replacingOccurrences(of: "{id}", with: id)
         }
         guard let url = URL(string: webBase + path) else {
-            throw RelatoError.invalidArgument("Could not build Feedback Assistant URL")
+            throw XCFBError.invalidArgument("Could not build Feedback Assistant URL")
         }
         return url
     }

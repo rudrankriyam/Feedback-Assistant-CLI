@@ -53,7 +53,7 @@ public enum FeedbackWebSubmissionValidator {
         form: FeedbackWebFormSchema
     ) throws -> FeedbackWebSubmissionPreflight {
         guard draft.formID == form.id else {
-            throw RelatoError.web(
+            throw XCFBError.web(
                 "draft \(draft.id) belongs to form \(draft.formID), not form \(form.id)"
             )
         }

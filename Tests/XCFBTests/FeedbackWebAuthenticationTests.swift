@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 import Testing
-@testable import RelatoKit
+@testable import XCFBCore
 
 @Test func webSRPMatchesASCCompatibleProofVector() throws {
     let secret = Data([0x03])
@@ -60,7 +60,7 @@ import Testing
 }
 
 @Test func webSRPRejectsInvalidServerValue() throws {
-    #expect(throws: RelatoError.self) {
+    #expect(throws: XCFBError.self) {
         try FeedbackWebSRP.calculateProof(
             username: "user@example.com",
             secret: Data([0x03]),
@@ -148,7 +148,7 @@ struct FeedbackWebAuthenticationFlowTests {
                     body: #"{"participant":{"id":"1"}}"#
                 )
             default:
-                throw RelatoError.web("unexpected request \(index)")
+                throw XCFBError.web("unexpected request \(index)")
             }
         }
 
@@ -217,7 +217,7 @@ struct FeedbackWebAuthenticationFlowTests {
                     body: #"{"participant":{"id":"1"}}"#
                 )
             default:
-                throw RelatoError.web("unexpected request \(requests.count)")
+                throw XCFBError.web("unexpected request \(requests.count)")
             }
         }
 
@@ -308,7 +308,7 @@ struct FeedbackWebAuthenticationFlowTests {
                     body: #"{"participant":{"id":"1"}}"#
                 )
             default:
-                throw RelatoError.web("unexpected request \(index)")
+                throw XCFBError.web("unexpected request \(index)")
             }
         }
 
@@ -414,7 +414,7 @@ struct FeedbackWebAuthenticationFlowTests {
                     body: #"{"participant":{"id":"1"}}"#
                 )
             default:
-                throw RelatoError.web("unexpected request \(requests.count)")
+                throw XCFBError.web("unexpected request \(requests.count)")
             }
         }
 
@@ -569,7 +569,7 @@ struct FeedbackWebAuthenticationFlowTests {
                     body: #"{"participant":{"id":"1"}}"#
                 )
             default:
-                throw RelatoError.web("unexpected request \(requests.count)")
+                throw XCFBError.web("unexpected request \(requests.count)")
             }
         }
 
@@ -647,7 +647,7 @@ struct FeedbackWebAuthenticationFlowTests {
             case 6:
                 return response(request, status: 500, body: "{}")
             default:
-                throw RelatoError.web("unexpected fallback request \(requests.count)")
+                throw XCFBError.web("unexpected fallback request \(requests.count)")
             }
         }
 
@@ -717,7 +717,7 @@ struct FeedbackWebAuthenticationFlowTests {
             case 7:
                 return response(request, status: 429, body: "{}")
             default:
-                throw RelatoError.web("unexpected phone request \(requests.count)")
+                throw XCFBError.web("unexpected phone request \(requests.count)")
             }
         }
 
@@ -781,7 +781,7 @@ private final class FeedbackWebAuthenticationMockURLProtocol:
     override func startLoading() {
         do {
             guard let handler = Self.handler else {
-                throw RelatoError.web("missing authentication mock handler")
+                throw XCFBError.web("missing authentication mock handler")
             }
             let (response, data) = try handler(request)
             client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
@@ -827,7 +827,7 @@ private func loginHTML(widgetKey: String) -> String {
 
 private func data(hex: String) throws -> Data {
     guard hex.count.isMultiple(of: 2) else {
-        throw RelatoError.web("invalid test hex")
+        throw XCFBError.web("invalid test hex")
     }
     var output = Data()
     output.reserveCapacity(hex.count / 2)
@@ -835,7 +835,7 @@ private func data(hex: String) throws -> Data {
     while index < hex.endIndex {
         let next = hex.index(index, offsetBy: 2)
         guard let byte = UInt8(hex[index..<next], radix: 16) else {
-            throw RelatoError.web("invalid test hex")
+            throw XCFBError.web("invalid test hex")
         }
         output.append(byte)
         index = next

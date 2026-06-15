@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate docs/COMMANDS.md from live `relato --help` output."""
+"""Generate docs/COMMANDS.md from live `xcfb --help` output."""
 
 from __future__ import annotations
 
@@ -15,9 +15,9 @@ OUTPUT_PATH = REPO_ROOT / "docs" / "COMMANDS.md"
 HELP_TOPICS = ["payload", "prepare", "submit", "fill", "store", "web"]
 
 
-def run_relato_help(*args: str) -> str:
+def run_xcfb_help(*args: str) -> str:
     proc = subprocess.run(
-        ["swift", "run", "relato", *args],
+        ["swift", "run", "xcfb", *args],
         cwd=REPO_ROOT,
         check=True,
         capture_output=True,
@@ -27,7 +27,7 @@ def run_relato_help(*args: str) -> str:
 
 
 def run_help_text() -> str:
-    return run_relato_help("--help")
+    return run_xcfb_help("--help")
 
 
 def parse_commands(help_text: str) -> list[str]:
@@ -38,7 +38,7 @@ def parse_commands(help_text: str) -> list[str]:
         if stripped == "Commands:":
             in_commands = True
             continue
-        if in_commands and stripped.startswith("relato "):
+        if in_commands and stripped.startswith("xcfb "):
             commands.append(stripped)
             continue
         if in_commands and commands and not stripped:
@@ -50,19 +50,19 @@ def render(commands: list[str], global_help: str, topic_help: dict[str, str]) ->
     lines = [
         "# Command Reference",
         "",
-        "This file is generated from live CLI help output. RelatoKit is optimized for agent-driven Feedback Assistant workflows.",
+        "This file is generated from live CLI help output. xcfb is optimized for agent-driven Feedback Assistant workflows.",
         "",
         "## Agent Flow",
         "",
         "1. Research the issue and write supporting evidence to a local file.",
-        "2. Run `relato prepare` to create `feedback-submission.json` and `feedback-submission.md`.",
+        "2. Run `xcfb prepare` to create `feedback-submission.json` and `feedback-submission.md`.",
         "3. Inspect both files before touching the native app.",
-        "4. Run `relato submit --dry-run --select-popups --payload feedback-submission.json`.",
-        "5. Run `relato submit --select-popups --payload feedback-submission.json` to fill safe fields, select known native popups, stage attachments, and stop before Submit.",
+        "4. Run `xcfb submit --dry-run --select-popups --payload feedback-submission.json`.",
+        "5. Run `xcfb submit --select-popups --payload feedback-submission.json` to fill safe fields, select known native popups, stage attachments, and stop before Submit.",
         "6. Inspect Feedback Assistant for native-only fields, popups, diagnostics, and staged attachments.",
         "7. Use `--confirm` only after explicit user confirmation.",
-        "8. Use `relato store list` and `relato store uploads` as local evidence afterward; they are not Apple server receipts.",
-        "9. Keep `relato web` isolated as an experimental server-backed workflow; require `--confirm` for submission.",
+        "8. Use `xcfb store list` and `xcfb store uploads` as local evidence afterward; they are not Apple server receipts.",
+        "9. Keep `xcfb web` isolated as an experimental server-backed workflow; require `--confirm` for submission.",
         "",
         "## Payload Contract",
         "",
@@ -98,7 +98,7 @@ def render(commands: list[str], global_help: str, topic_help: dict[str, str]) ->
     for topic, help_text in topic_help.items():
         lines.extend(
             [
-                f"### `relato help {topic}`",
+                f"### `xcfb help {topic}`",
                 "",
                 "```sh",
                 help_text.rstrip(),
@@ -110,15 +110,15 @@ def render(commands: list[str], global_help: str, topic_help: dict[str, str]) ->
         [
             "## Scripting Tips",
             "",
-            "- Use `relato submit --dry-run` before `--confirm` to preview the native handoff plan.",
+            "- Use `xcfb submit --dry-run` before `--confirm` to preview the native handoff plan.",
             "- Treat the JSON payload as the source of truth; regenerate it instead of hand-editing unless you know the schema.",
             "- Use the Markdown payload to review the report body and stage supporting evidence.",
-            "- Use `relato open ROUTE --print-only` when you only need the Feedback Assistant URL.",
-            "- Use `relato store summary` and `relato store list` for local verification after native submission.",
+            "- Use `xcfb open ROUTE --print-only` when you only need the Feedback Assistant URL.",
+            "- Use `xcfb store summary` and `xcfb store list` for local verification after native submission.",
             "- Treat local store verification as local evidence, not an Apple server receipt.",
             "- `--select-popups` briefly activates Feedback Assistant to select native platform, area, and type menus.",
-            "- Use `relato web auth status` before experimental web requests.",
-            "- Treat `relato web` response schemas as unstable and preserve raw JSON when debugging.",
+            "- Use `xcfb web auth status` before experimental web requests.",
+            "- Treat `xcfb web` response schemas as unstable and preserve raw JSON when debugging.",
             "",
         ]
     )
@@ -131,7 +131,7 @@ def main() -> int:
     args = parser.parse_args()
 
     global_help = run_help_text()
-    topic_help = {topic: run_relato_help("help", topic) for topic in HELP_TOPICS}
+    topic_help = {topic: run_xcfb_help("help", topic) for topic in HELP_TOPICS}
     generated = render(parse_commands(global_help), global_help, topic_help)
 
     if args.check:

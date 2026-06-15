@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a reproducible RelatoKit bug
+description: Report a reproducible xcfb bug
 title: "[Bug]: "
 labels: ["bug"]
 body:
@@ -14,17 +14,17 @@ body:
     id: steps
     attributes:
       label: Steps to Reproduce
-      description: Include the exact `relato` command when possible.
+      description: Include the exact `xcfb` command when possible.
       placeholder: |
-        1. Run `relato ...`
+        1. Run `xcfb ...`
         2. Observe ...
     validations:
       required: true
   - type: input
     id: version
     attributes:
-      label: RelatoKit Version
-      placeholder: "`relato version` output"
+      label: xcfb Version
+      placeholder: "`xcfb version` output"
     validations:
       required: true
   - type: input

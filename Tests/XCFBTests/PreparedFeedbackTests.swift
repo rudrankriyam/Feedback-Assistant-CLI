@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import RelatoKit
+@testable import XCFBCore
 
 @Test func preparedFeedbackBuildsFeedbackAssistantURL() throws {
     let category = FeedbackCategory(
@@ -81,7 +81,7 @@ import Testing
 }
 
 @Test func routeWithMissingIDThrows() {
-    #expect(throws: RelatoError.self) {
+    #expect(throws: XCFBError.self) {
         try FeedbackRoutes.url(for: "feedback")
     }
 }

@@ -1,4 +1,4 @@
-BINARY_NAME := relato
+BINARY_NAME := xcfb
 
 .PHONY: all
 all: build
@@ -38,8 +38,13 @@ check-command-docs:
 	@echo "Checking command docs..."
 	python3 scripts/generate-command-docs.py --check
 
+.PHONY: check-package-surface
+check-package-surface:
+	@echo "Checking executable-only package surface..."
+	python3 scripts/check-package-surface.py
+
 .PHONY: check
-check: test check-command-docs build-release
+check: test check-package-surface check-command-docs build-release
 
 .PHONY: clean
 clean:
