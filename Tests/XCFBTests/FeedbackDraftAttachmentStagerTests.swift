@@ -1,10 +1,10 @@
 import Foundation
 import Testing
-@testable import RelatoKit
+@testable import XCFBCore
 
 @Test func draftAttachmentStagerCopiesIntoNewestDraft() throws {
     let root = FileManager.default.temporaryDirectory
-        .appendingPathComponent("RelatoKitTests-\(UUID().uuidString)", isDirectory: true)
+        .appendingPathComponent("XCFBTests-\(UUID().uuidString)", isDirectory: true)
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: root) }
 

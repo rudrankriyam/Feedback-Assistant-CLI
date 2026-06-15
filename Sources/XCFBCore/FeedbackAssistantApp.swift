@@ -1,6 +1,6 @@
 import AppKit
 import Foundation
-import RelatoNativeAutomation
+import XCFBNativeAutomation
 
 public enum FeedbackAssistantApp {
     public struct FillResult: Equatable {
@@ -57,7 +57,7 @@ public enum FeedbackAssistantApp {
         confirmSubmit: Bool
     ) throws {
         var errorMessage: UnsafeMutablePointer<CChar>?
-        let status = RelatoFeedbackAssistantFill(
+        let status = XCFBFeedbackAssistantFill(
             payload.title,
             payload.description,
             payload.category.topic,
@@ -72,11 +72,11 @@ public enum FeedbackAssistantApp {
         )
         defer {
             if let errorMessage {
-                RelatoFeedbackAssistantFree(errorMessage)
+                XCFBFeedbackAssistantFree(errorMessage)
             }
         }
         guard status == 0 else {
-            throw RelatoError.invalidArgument(errorMessage.map { String(cString: $0) } ?? "Feedback Assistant automation failed")
+            throw XCFBError.invalidArgument(errorMessage.map { String(cString: $0) } ?? "Feedback Assistant automation failed")
         }
     }
 
@@ -87,7 +87,7 @@ public enum FeedbackAssistantApp {
         try process.run()
         process.waitUntilExit()
         guard process.terminationStatus == 0 else {
-            throw RelatoError.processFailed((launchPath as NSString).lastPathComponent, process.terminationStatus)
+            throw XCFBError.processFailed((launchPath as NSString).lastPathComponent, process.terminationStatus)
         }
     }
 }

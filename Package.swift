@@ -3,22 +3,21 @@
 import PackageDescription
 
 let package = Package(
-    name: "RelatoKit",
+    name: "xcfb",
     platforms: [
         .macOS(.v14)
     ],
     products: [
-        .library(name: "RelatoKit", targets: ["RelatoKit"]),
-        .executable(name: "relato", targets: ["relato"])
+        .executable(name: "xcfb", targets: ["xcfb"])
     ],
     dependencies: [
         .package(url: "https://github.com/attaswift/BigInt.git", from: "5.7.0")
     ],
     targets: [
         .target(
-            name: "RelatoKit",
+            name: "XCFBCore",
             dependencies: [
-                "RelatoNativeAutomation",
+                "XCFBNativeAutomation",
                 .product(name: "BigInt", package: "BigInt"),
             ],
             linkerSettings: [
@@ -26,14 +25,14 @@ let package = Package(
                 .linkedFramework("Security")
             ]
         ),
-        .target(name: "RelatoNativeAutomation"),
+        .target(name: "XCFBNativeAutomation"),
         .executableTarget(
-            name: "relato",
-            dependencies: ["RelatoKit"]
+            name: "xcfb",
+            dependencies: ["XCFBCore"]
         ),
         .testTarget(
-            name: "RelatoKitTests",
-            dependencies: ["RelatoKit"]
+            name: "XCFBTests",
+            dependencies: ["XCFBCore"]
         )
     ]
 )

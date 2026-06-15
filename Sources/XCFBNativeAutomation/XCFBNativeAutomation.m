@@ -1,4 +1,4 @@
-#import "RelatoNativeAutomation.h"
+#import "XCFBNativeAutomation.h"
 
 #import <AppKit/AppKit.h>
 #import <ApplicationServices/ApplicationServices.h>
@@ -15,7 +15,7 @@ static int RFAFail(char **errorOut, NSString *message) {
     return 1;
 }
 
-void RelatoFeedbackAssistantFree(char *value) {
+void XCFBFeedbackAssistantFree(char *value) {
     free(value);
 }
 
@@ -253,7 +253,7 @@ static int RFASelectPopup(
     return RFAFail(errorOut, [NSString stringWithFormat:@"Popup did not commit value '%@' for %@", value, [labels componentsJoinedByString:@" / "]]);
 }
 
-int RelatoFeedbackAssistantFill(
+int XCFBFeedbackAssistantFill(
     const char *title,
     const char *description,
     const char *topic,

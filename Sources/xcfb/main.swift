@@ -1,12 +1,12 @@
 import Darwin
 import Foundation
-import RelatoKit
+import XCFBCore
 
-enum RelatoCLI {
-    static let version = "0.2.0"
-    static let webAppleIDEnvironment = "RELATO_WEB_APPLE_ID"
-    static let webPasswordEnvironment = "RELATO_WEB_PASSWORD"
-    static let webTwoFactorCommandEnvironment = "RELATO_WEB_2FA_CODE_COMMAND"
+enum XCFBCLI {
+    static let version = "0.3.0"
+    static let webAppleIDEnvironment = "XCFB_WEB_APPLE_ID"
+    static let webPasswordEnvironment = "XCFB_WEB_PASSWORD"
+    static let webTwoFactorCommandEnvironment = "XCFB_WEB_2FA_CODE_COMMAND"
 
     static func run(_ rawArguments: [String]) async throws {
         var arguments = rawArguments
@@ -62,7 +62,7 @@ enum RelatoCLI {
         case "web":
             try await runWeb(arguments)
         default:
-            throw RelatoError.invalidArgument("Unknown command: \(command)")
+            throw XCFBError.invalidArgument("Unknown command: \(command)")
         }
     }
 
@@ -86,14 +86,14 @@ enum RelatoCLI {
         case "drafts":
             try await runWebDrafts(arguments)
         default:
-            throw RelatoError.invalidArgument("Unknown web subcommand: \(subcommand)")
+            throw XCFBError.invalidArgument("Unknown web subcommand: \(subcommand)")
         }
     }
 
     static func runWebAuth(_ rawArguments: [String]) async throws {
         var arguments = rawArguments
         guard !arguments.isEmpty else {
-            throw RelatoError.invalidArgument("web auth requires a subcommand: login, status, logout")
+            throw XCFBError.invalidArgument("web auth requires a subcommand: login, status, logout")
         }
 
         let subcommand = arguments.removeFirst()
@@ -115,7 +115,7 @@ enum RelatoCLI {
             try ensureNoArguments(arguments)
 
             guard !appleID.isEmpty else {
-                throw RelatoError.invalidArgument(
+                throw XCFBError.invalidArgument(
                     "--apple-id is required when \(webAppleIDEnvironment) is not set"
                 )
             }
@@ -172,18 +172,18 @@ enum RelatoCLI {
                 "storage": store.source,
             ])
         default:
-            throw RelatoError.invalidArgument("Unknown web auth subcommand: \(subcommand)")
+            throw XCFBError.invalidArgument("Unknown web auth subcommand: \(subcommand)")
         }
     }
 
     static func runWebInbox(_ rawArguments: [String]) async throws {
         var arguments = rawArguments
         guard !arguments.isEmpty else {
-            throw RelatoError.invalidArgument("web inbox requires the list subcommand")
+            throw XCFBError.invalidArgument("web inbox requires the list subcommand")
         }
         let subcommand = arguments.removeFirst()
         guard subcommand == "list" else {
-            throw RelatoError.invalidArgument("Unknown web inbox subcommand: \(subcommand)")
+            throw XCFBError.invalidArgument("Unknown web inbox subcommand: \(subcommand)")
         }
 
         let locale = try takeOption("--locale", from: &arguments) ?? "en"
@@ -199,7 +199,7 @@ enum RelatoCLI {
     static func runWebFeedback(_ rawArguments: [String]) async throws {
         var arguments = rawArguments
         guard !arguments.isEmpty else {
-            throw RelatoError.invalidArgument(
+            throw XCFBError.invalidArgument(
                 "web feedback requires a subcommand: view, status"
             )
         }
@@ -218,7 +218,7 @@ enum RelatoCLI {
         case "status":
             data = try await client.feedbackStatus(id: id, locale: locale)
         default:
-            throw RelatoError.invalidArgument(
+            throw XCFBError.invalidArgument(
                 "Unknown web feedback subcommand: \(subcommand)"
             )
         }
@@ -228,7 +228,7 @@ enum RelatoCLI {
     static func runWebForms(_ rawArguments: [String]) async throws {
         var arguments = rawArguments
         guard !arguments.isEmpty else {
-            throw RelatoError.invalidArgument("web forms requires a subcommand: list, view, options")
+            throw XCFBError.invalidArgument("web forms requires a subcommand: list, view, options")
         }
 
         let subcommand = arguments.removeFirst()
@@ -261,7 +261,7 @@ enum RelatoCLI {
             try printJSON(form.options(tat: tat), pretty: !compact)
             return
         default:
-            throw RelatoError.invalidArgument("Unknown web forms subcommand: \(subcommand)")
+            throw XCFBError.invalidArgument("Unknown web forms subcommand: \(subcommand)")
         }
         try printJSONData(data, pretty: !compact)
     }
@@ -269,7 +269,7 @@ enum RelatoCLI {
     static func runWebDrafts(_ rawArguments: [String]) async throws {
         var arguments = rawArguments
         guard !arguments.isEmpty else {
-            throw RelatoError.invalidArgument(
+            throw XCFBError.invalidArgument(
                 "web drafts requires a subcommand: create, view, update, attach, validate, submit"
             )
         }
@@ -333,7 +333,7 @@ enum RelatoCLI {
             if let payloadPath = try takeOption("--payload", from: &arguments) {
                 let payload = try loadPayload(at: expandedPath(payloadPath))
                 guard let snapshot = payload.snapshot else {
-                    throw RelatoError.invalidArgument(
+                    throw XCFBError.invalidArgument(
                         "The payload does not contain a snapshot attachment"
                     )
                 }
@@ -341,7 +341,7 @@ enum RelatoCLI {
             }
             try ensureNoArguments(arguments)
             guard !paths.isEmpty else {
-                throw RelatoError.invalidArgument(
+                throw XCFBError.invalidArgument(
                     "web drafts attach requires --file PATH or --payload PATH"
                 )
             }
@@ -381,8 +381,8 @@ enum RelatoCLI {
             let confirmed = takeFlag("--confirm", from: &arguments)
             try ensureNoArguments(arguments)
             guard confirmed else {
-                throw RelatoError.invalidArgument(
-                    "web drafts submit requires --confirm; inspect `relato web drafts view --id \(id)` and `relato web drafts validate --id \(id)` first"
+                throw XCFBError.invalidArgument(
+                    "web drafts submit requires --confirm; inspect `xcfb web drafts view --id \(id)` and `xcfb web drafts validate --id \(id)` first"
                 )
             }
             let client = try makeFeedbackWebClient()
@@ -390,7 +390,7 @@ enum RelatoCLI {
             try printJSON(receipt, pretty: !compact)
             return
         default:
-            throw RelatoError.invalidArgument("Unknown web drafts subcommand: \(subcommand)")
+            throw XCFBError.invalidArgument("Unknown web drafts subcommand: \(subcommand)")
         }
         try printJSONData(data, pretty: !compact)
     }
@@ -445,7 +445,7 @@ enum RelatoCLI {
         var customUpdates: [String: [String]] = [:]
         for assignment in try takeOptions("--answer", from: &arguments) {
             guard let separator = assignment.firstIndex(of: "=") else {
-                throw RelatoError.invalidArgument(
+                throw XCFBError.invalidArgument(
                     "Invalid --answer value: \(assignment). Expected TAT=VALUE"
                 )
             }
@@ -453,7 +453,7 @@ enum RelatoCLI {
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             let value = String(assignment[assignment.index(after: separator)...])
             guard !tat.isEmpty, !value.isEmpty else {
-                throw RelatoError.invalidArgument(
+                throw XCFBError.invalidArgument(
                     "Invalid --answer value: \(assignment). Expected non-empty TAT=VALUE"
                 )
             }
@@ -464,7 +464,7 @@ enum RelatoCLI {
         }
 
         guard !updates.isEmpty else {
-            throw RelatoError.invalidArgument(
+            throw XCFBError.invalidArgument(
                 "web drafts update requires --payload, a named field option, or --answer TAT=VALUE"
             )
         }
@@ -478,7 +478,7 @@ enum RelatoCLI {
         case "suggestion":
             return "Suggestion"
         default:
-            throw RelatoError.invalidArgument(
+            throw XCFBError.invalidArgument(
                 "Invalid value for --kind: \(value). Expected bug or suggestion."
             )
         }
@@ -487,7 +487,7 @@ enum RelatoCLI {
     static func runStore(_ rawArguments: [String]) throws {
         var arguments = rawArguments
         guard !arguments.isEmpty else {
-            throw RelatoError.invalidArgument("store requires a subcommand: summary, list, uploads")
+            throw XCFBError.invalidArgument("store requires a subcommand: summary, list, uploads")
         }
         let subcommand = arguments.removeFirst()
         let dbPath = try takeOption("--db", from: &arguments) ?? FeedbackStore.defaultPath
@@ -510,7 +510,7 @@ enum RelatoCLI {
             let rows = try store.uploadTasks(limit: limit)
             printTable([["pk", "task_id", "state", "stage", "uploaded", "total"]] + rows.map { [$0.pk, $0.taskID, $0.state, $0.stage, $0.uploaded, $0.total] })
         default:
-            throw RelatoError.invalidArgument("Unknown store subcommand: \(subcommand)")
+            throw XCFBError.invalidArgument("Unknown store subcommand: \(subcommand)")
         }
     }
 
@@ -541,7 +541,7 @@ enum RelatoCLI {
         let requestedPlatform = try takeOption("--platform", from: &arguments)
         let kindValue = try takeOption("--kind", from: &arguments) ?? "bug"
         guard let kind = FeedbackKind(rawValue: kindValue) else {
-            throw RelatoError.invalidArgument("Invalid value for --kind: \(kindValue). Expected bug or suggestion.")
+            throw XCFBError.invalidArgument("Invalid value for --kind: \(kindValue). Expected bug or suggestion.")
         }
         let outputDir = expandedPath(try takeOption("--output-dir", from: &arguments) ?? FileManager.default.currentDirectoryPath)
 
@@ -550,7 +550,7 @@ enum RelatoCLI {
         if let snapshotPath = snapshot {
             snapshot = URL(fileURLWithPath: snapshotPath).standardizedFileURL.path
             if !FileManager.default.fileExists(atPath: snapshot!) {
-                throw RelatoError.missingFile(snapshot!)
+                throw XCFBError.missingFile(snapshot!)
             }
         }
 
@@ -558,7 +558,7 @@ enum RelatoCLI {
         let platform: String?
         if let requestedPlatform {
             guard let normalized = FeedbackPlatformInferer.normalize(requestedPlatform) else {
-                throw RelatoError.invalidArgument(
+                throw XCFBError.invalidArgument(
                     "Invalid value for --platform: \(requestedPlatform). Expected one of: \(FeedbackPlatformInferer.supportedPlatforms.joined(separator: ", "))."
                 )
             }
@@ -600,7 +600,7 @@ enum RelatoCLI {
     static func runOpen(_ rawArguments: [String]) throws {
         var arguments = rawArguments
         guard !arguments.isEmpty else {
-            throw RelatoError.invalidArgument("open requires a route")
+            throw XCFBError.invalidArgument("open requires a route")
         }
         let route = arguments.removeFirst()
         let id = try takeOption("--id", from: &arguments)
@@ -699,13 +699,13 @@ enum RelatoCLI {
 
     static func loadPayload(at path: String) throws -> PreparedFeedback {
         guard FileManager.default.fileExists(atPath: path) else {
-            throw RelatoError.missingFile(path)
+            throw XCFBError.missingFile(path)
         }
         let data = try Data(contentsOf: URL(fileURLWithPath: path))
         do {
             return try JSONDecoder().decode(PreparedFeedback.self, from: data)
         } catch {
-            throw RelatoError.invalidArgument("Could not decode payload at \(path): \(friendlyDecodeError(error))")
+            throw XCFBError.invalidArgument("Could not decode payload at \(path): \(friendlyDecodeError(error))")
         }
     }
 
@@ -716,7 +716,7 @@ enum RelatoCLI {
             components.host == "feedbackassistant.apple.com",
             let url = components.url
         else {
-            throw RelatoError.invalidArgument("Payload URL must be an https://feedbackassistant.apple.com URL")
+            throw XCFBError.invalidArgument("Payload URL must be an https://feedbackassistant.apple.com URL")
         }
         return url
     }
@@ -725,7 +725,7 @@ enum RelatoCLI {
         guard let index = arguments.firstIndex(of: name) else { return nil }
         arguments.remove(at: index)
         guard index < arguments.count, !arguments[index].hasPrefix("--") else {
-            throw RelatoError.missingValue(name)
+            throw XCFBError.missingValue(name)
         }
         return arguments.remove(at: index)
     }
@@ -735,7 +735,7 @@ enum RelatoCLI {
         while let index = arguments.firstIndex(of: name) {
             arguments.remove(at: index)
             guard index < arguments.count, !arguments[index].hasPrefix("--") else {
-                throw RelatoError.missingValue(name)
+                throw XCFBError.missingValue(name)
             }
             values.append(arguments.remove(at: index))
         }
@@ -744,7 +744,7 @@ enum RelatoCLI {
 
     static func requireOption(_ name: String, from arguments: inout [String]) throws -> String {
         guard let value = try takeOption(name, from: &arguments), !value.isEmpty else {
-            throw RelatoError.missingValue(name)
+            throw XCFBError.missingValue(name)
         }
         return value
     }
@@ -757,20 +757,20 @@ enum RelatoCLI {
 
     static func ensureNoArguments(_ arguments: [String]) throws {
         guard arguments.isEmpty else {
-            throw RelatoError.invalidArgument("Unexpected argument(s): \(arguments.joined(separator: " "))")
+            throw XCFBError.invalidArgument("Unexpected argument(s): \(arguments.joined(separator: " "))")
         }
     }
 
     static func parseLimit(_ value: String) throws -> Int {
         guard let limit = Int(value), limit >= 0 else {
-            throw RelatoError.invalidArgument("Invalid value for --limit: \(value). Expected a non-negative integer.")
+            throw XCFBError.invalidArgument("Invalid value for --limit: \(value). Expected a non-negative integer.")
         }
         return limit
     }
 
     static func parseSeconds(_ value: String, flag: String) throws -> Double {
         guard let seconds = Double(value), seconds >= 0 else {
-            throw RelatoError.invalidArgument("Invalid value for \(flag): \(value). Expected a non-negative number.")
+            throw XCFBError.invalidArgument("Invalid value for \(flag): \(value). Expected a non-negative number.")
         }
         return seconds
     }
@@ -782,7 +782,7 @@ enum RelatoCLI {
             return password
         }
         guard hasInteractiveTerminal() else {
-            throw RelatoError.invalidArgument(
+            throw XCFBError.invalidArgument(
                 "Apple Account password is required; run in a terminal or set \(webPasswordEnvironment)"
             )
         }
@@ -820,23 +820,23 @@ enum RelatoCLI {
                 outputData = output.fileHandleForReading.readDataToEndOfFile()
                 process.waitUntilExit()
             } catch {
-                throw RelatoError.web("could not run the two-factor code command")
+                throw XCFBError.web("could not run the two-factor code command")
             }
             guard process.terminationStatus == 0 else {
-                throw RelatoError.web("the two-factor code command failed")
+                throw XCFBError.web("the two-factor code command failed")
             }
             let code = String(
                 decoding: outputData,
                 as: UTF8.self
             ).trimmingCharacters(in: .whitespacesAndNewlines)
             guard !code.isEmpty else {
-                throw RelatoError.web("the two-factor code command returned no code")
+                throw XCFBError.web("the two-factor code command returned no code")
             }
             return code
         }
 
         guard hasInteractiveTerminal() else {
-            throw RelatoError.invalidArgument(
+            throw XCFBError.invalidArgument(
                 "two-factor code is required; run in a terminal, pass --two-factor-code-command, or set \(webTwoFactorCommandEnvironment)"
             )
         }
@@ -851,13 +851,13 @@ enum RelatoCLI {
             return String(cString: result)
         }
         guard let value else {
-            throw RelatoError.web("could not read secure terminal input")
+            throw XCFBError.web("could not read secure terminal input")
         }
         let resolved = trim
             ? value.trimmingCharacters(in: .whitespacesAndNewlines)
             : value
         guard !resolved.isEmpty else {
-            throw RelatoError.invalidArgument("secure terminal input cannot be empty")
+            throw XCFBError.invalidArgument("secure terminal input cannot be empty")
         }
         return resolved
     }
@@ -913,7 +913,7 @@ enum RelatoCLI {
         do {
             return try JSONDecoder().decode(type, from: data)
         } catch {
-            throw RelatoError.web(
+            throw XCFBError.web(
                 "could not decode Apple's \(name) response: \(friendlyDecodeError(error))"
             )
         }
@@ -923,7 +923,7 @@ enum RelatoCLI {
         do {
             return try JSONSerialization.jsonObject(with: data)
         } catch {
-            throw RelatoError.web("Apple returned malformed JSON")
+            throw XCFBError.web("Apple returned malformed JSON")
         }
     }
 
@@ -933,7 +933,7 @@ enum RelatoCLI {
 
     static func printJSONObject(_ object: Any, pretty: Bool = true) throws {
         guard JSONSerialization.isValidJSONObject(object) else {
-            throw RelatoError.web("could not encode JSON output")
+            throw XCFBError.web("could not encode JSON output")
         }
         let options: JSONSerialization.WritingOptions = pretty ? [.prettyPrinted, .sortedKeys] : []
         let data = try JSONSerialization.data(withJSONObject: object, options: options)
@@ -1029,7 +1029,7 @@ enum RelatoCLI {
             return
         }
         guard arguments.count == 1 else {
-            throw RelatoError.invalidArgument("help accepts at most one topic")
+            throw XCFBError.invalidArgument("help accepts at most one topic")
         }
         printHelp(topic: arguments[0])
     }
@@ -1054,62 +1054,62 @@ enum RelatoCLI {
     static func printHelp() {
         print(
             """
-            relato: agent-first tooling for Apple Feedback Assistant workflows
+            xcfb: agent-first tooling for Apple Feedback Assistant workflows
 
-            RelatoKit is designed for coding agents preparing useful Feedback Assistant
+            xcfb is designed for coding agents preparing useful Feedback Assistant
             reports. Its stable workflow uses Apple's native macOS app. The experimental
             `web` command family provides headless access to Apple's undocumented
             Feedback Assistant web service after an explicit Apple Account login.
 
             Agent workflow:
               1. Research the issue and write any supporting evidence to a local file.
-              2. Run `relato prepare` to create the payload pair:
-                   feedback-submission.json  machine-readable contract for relato
+              2. Run `xcfb prepare` to create the payload pair:
+                   feedback-submission.json  machine-readable contract for xcfb
                    feedback-submission.md    human-readable report for review/logs
               3. Inspect the Markdown and JSON before touching the native app.
-              4. Run `relato submit --dry-run --select-popups --payload feedback-submission.json`.
-              5. Run `relato submit --select-popups --payload feedback-submission.json`
+              4. Run `xcfb submit --dry-run --select-popups --payload feedback-submission.json`.
+              5. Run `xcfb submit --select-popups --payload feedback-submission.json`
                  to open, fill, and select known native popups without submitting.
               6. Inspect Feedback Assistant for native-only fields, diagnostics, and files.
               7. Only after explicit user confirmation, run with `--confirm`.
-              8. Use `relato store list` and `relato store uploads` as local evidence.
+              8. Use `xcfb store list` and `xcfb store uploads` as local evidence.
 
             Commands:
-              relato version
-              relato store summary [--db PATH]
-              relato store list [--limit N] [--db PATH]
-              relato store uploads [--limit N] [--db PATH]
-              relato categories [--db PATH]
-              relato categorize --title TEXT [--description TEXT] [--bundle-id ID]
-              relato prepare --title TEXT --description TEXT [--snapshot PATH] [--bundle-id ID] [--platform PLATFORM] [--kind bug|suggestion] [--output-dir DIR]
-              relato routes
-              relato open ROUTE [--id ID] [--print-only]
-              relato open-native [--payload PATH]
-              relato fill [--payload PATH] [--select-popups]
-              relato submit [--payload PATH] [--select-popups] [--wait-seconds N] [--verify-wait-seconds N] [--db PATH] [--confirm] [--verify-store] [--dry-run]
-              relato web auth login --apple-id EMAIL [--two-factor-code-command COMMAND]
-              relato web auth status
-              relato web auth logout
-              relato web inbox list [--locale LOCALE] [--team-id ID] [--compact]
-              relato web feedback view --id ID [--locale LOCALE] [--compact]
-              relato web feedback status --id ID [--locale LOCALE] [--compact]
-              relato web forms list [--locale LOCALE] [--team-id ID] [--compact]
-              relato web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]
-              relato web forms options --id ID [--tat TAT] [--locale LOCALE] [--team-id ID] [--compact]
-              relato web drafts create --form-id ID [--locale LOCALE] [--team-id ID] [--compact]
-              relato web drafts view --id ID [--locale LOCALE] [--compact]
-              relato web drafts update --id ID [--payload PATH] [field options] [--answer TAT=VALUE]... [--locale LOCALE] [--compact]
-              relato web drafts attach --id ID [--file PATH]... [--payload PATH] [--locale LOCALE] [--compact]
-              relato web drafts validate --id ID [--locale LOCALE] [--compact]
-              relato web drafts submit --id ID --confirm [--locale LOCALE] [--compact]
+              xcfb version
+              xcfb store summary [--db PATH]
+              xcfb store list [--limit N] [--db PATH]
+              xcfb store uploads [--limit N] [--db PATH]
+              xcfb categories [--db PATH]
+              xcfb categorize --title TEXT [--description TEXT] [--bundle-id ID]
+              xcfb prepare --title TEXT --description TEXT [--snapshot PATH] [--bundle-id ID] [--platform PLATFORM] [--kind bug|suggestion] [--output-dir DIR]
+              xcfb routes
+              xcfb open ROUTE [--id ID] [--print-only]
+              xcfb open-native [--payload PATH]
+              xcfb fill [--payload PATH] [--select-popups]
+              xcfb submit [--payload PATH] [--select-popups] [--wait-seconds N] [--verify-wait-seconds N] [--db PATH] [--confirm] [--verify-store] [--dry-run]
+              xcfb web auth login --apple-id EMAIL [--two-factor-code-command COMMAND]
+              xcfb web auth status
+              xcfb web auth logout
+              xcfb web inbox list [--locale LOCALE] [--team-id ID] [--compact]
+              xcfb web feedback view --id ID [--locale LOCALE] [--compact]
+              xcfb web feedback status --id ID [--locale LOCALE] [--compact]
+              xcfb web forms list [--locale LOCALE] [--team-id ID] [--compact]
+              xcfb web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]
+              xcfb web forms options --id ID [--tat TAT] [--locale LOCALE] [--team-id ID] [--compact]
+              xcfb web drafts create --form-id ID [--locale LOCALE] [--team-id ID] [--compact]
+              xcfb web drafts view --id ID [--locale LOCALE] [--compact]
+              xcfb web drafts update --id ID [--payload PATH] [field options] [--answer TAT=VALUE]... [--locale LOCALE] [--compact]
+              xcfb web drafts attach --id ID [--file PATH]... [--payload PATH] [--locale LOCALE] [--compact]
+              xcfb web drafts validate --id ID [--locale LOCALE] [--compact]
+              xcfb web drafts submit --id ID --confirm [--locale LOCALE] [--compact]
 
             Help topics:
-              relato help payload
-              relato help prepare
-              relato help submit
-              relato help fill
-              relato help store
-              relato help web
+              xcfb help payload
+              xcfb help prepare
+              xcfb help submit
+              xcfb help fill
+              xcfb help store
+              xcfb help web
 
             Safety:
               `--confirm` presses the native Submit button through Accessibility. It is not headless
@@ -1121,7 +1121,7 @@ enum RelatoCLI {
               Snapshot attachments are staged into the local Feedback Assistant draft
               folder in the background after the native draft exists.
 
-              `relato web` is unofficial and isolated from the stable native workflow.
+              `xcfb web` is unofficial and isolated from the stable native workflow.
               Its endpoints may change without notice. Draft creation, inspection, and
               schema-validated answer updates are supported. Attachment upload uses
               Apple's file-promise protocol and verifies the result from the draft.
@@ -1134,10 +1134,10 @@ enum RelatoCLI {
     static func printPrepareHelp() {
         print(
             """
-            relato prepare: create the payload pair agents should review and reuse
+            xcfb prepare: create the payload pair agents should review and reuse
 
             Usage:
-              relato prepare --title TEXT --description TEXT [--snapshot PATH] [--bundle-id ID] [--platform PLATFORM] [--kind bug|suggestion] [--output-dir DIR]
+              xcfb prepare --title TEXT --description TEXT [--snapshot PATH] [--bundle-id ID] [--platform PLATFORM] [--kind bug|suggestion] [--output-dir DIR]
 
             Outputs:
               feedback-submission.json
@@ -1162,15 +1162,15 @@ enum RelatoCLI {
               --output-dir DIR      Where to write the JSON and Markdown files.
 
             Agent pattern:
-              relato prepare \\
+              xcfb prepare \\
                 --title "Foundation Models framework: add first-class video input support" \\
                 --description "$REPORT_BODY" \\
                 --snapshot ./evidence.md \\
                 --kind suggestion \\
-                --output-dir /tmp/relato-report
+                --output-dir /tmp/xcfb-report
 
-              sed -n '1,220p' /tmp/relato-report/feedback-submission.md
-              relato submit --payload /tmp/relato-report/feedback-submission.json --dry-run
+              sed -n '1,220p' /tmp/xcfb-report/feedback-submission.md
+              xcfb submit --payload /tmp/xcfb-report/feedback-submission.json --dry-run
             """
         )
     }
@@ -1178,10 +1178,10 @@ enum RelatoCLI {
     static func printSubmitHelp() {
         print(
             """
-            relato submit: open/fill Feedback Assistant and optionally click native Submit
+            xcfb submit: open/fill Feedback Assistant and optionally click native Submit
 
             Usage:
-              relato submit [--payload PATH] [--select-popups] [--wait-seconds N] [--verify-wait-seconds N] [--db PATH] [--confirm] [--verify-store] [--dry-run]
+              xcfb submit [--payload PATH] [--select-popups] [--wait-seconds N] [--verify-wait-seconds N] [--db PATH] [--confirm] [--verify-store] [--dry-run]
 
             Default behavior:
               Without `--confirm`, this fills the native form from the JSON payload, hides
@@ -1204,7 +1204,7 @@ enum RelatoCLI {
               Apple can add topic-specific required fields, popups, diagnostics, or log
               gathering. Agents should inspect the native app before `--confirm`; the
               local store check is useful evidence but not a server-side receipt.
-              RelatoKit uses an Objective-C Accessibility engine for native UI automation.
+              xcfb uses an Objective-C Accessibility engine for native UI automation.
               Text fields are set through passive AX value writes. With `--select-popups`,
               native platform, area, and type menus are selected through AX actions.
               Snapshot attachments are staged into the local Feedback Assistant draft folder after the native draft
@@ -1212,12 +1212,12 @@ enum RelatoCLI {
               Feedback Assistant and fails closed if the requested native option is absent.
 
             Agent pattern:
-              relato submit --payload feedback-submission.json --select-popups --dry-run
-              relato submit --payload feedback-submission.json --select-popups
+              xcfb submit --payload feedback-submission.json --select-popups --dry-run
+              xcfb submit --payload feedback-submission.json --select-popups
               # inspect native UI and satisfy any remaining Apple-only fields
-              relato submit --payload feedback-submission.json --select-popups --confirm --verify-store
-              relato store list --limit 10
-              relato store uploads --limit 10
+              xcfb submit --payload feedback-submission.json --select-popups --confirm --verify-store
+              xcfb store list --limit 10
+              xcfb store uploads --limit 10
             """
         )
     }
@@ -1225,10 +1225,10 @@ enum RelatoCLI {
     static func printFillHelp() {
         print(
             """
-            relato fill: fill the currently open Feedback Assistant draft
+            xcfb fill: fill the currently open Feedback Assistant draft
 
             Usage:
-              relato fill [--payload PATH] [--select-popups]
+              xcfb fill [--payload PATH] [--select-popups]
 
             Notes:
               This does not open a new route and does not submit. It is useful when an
@@ -1244,17 +1244,17 @@ enum RelatoCLI {
     static func printStoreHelp() {
         print(
             """
-            relato store: inspect the local Feedback Assistant store
+            xcfb store: inspect the local Feedback Assistant store
 
             Usage:
-              relato store summary [--db PATH]
-              relato store list [--limit N] [--db PATH]
-              relato store uploads [--limit N] [--db PATH]
+              xcfb store summary [--db PATH]
+              xcfb store list [--limit N] [--db PATH]
+              xcfb store uploads [--limit N] [--db PATH]
 
             Agent pattern:
-              relato store summary
-              relato store list --limit 10
-              relato store uploads --limit 10
+              xcfb store summary
+              xcfb store list --limit 10
+              xcfb store uploads --limit 10
 
             Notes:
               Store reads are local evidence only. They can show drafts, recent items,
@@ -1266,7 +1266,7 @@ enum RelatoCLI {
     static func printWebHelp() {
         print(
             """
-            relato web: experimental Feedback Assistant web access
+            xcfb web: experimental Feedback Assistant web access
 
             Status:
               EXPERIMENTAL / UNOFFICIAL
@@ -1276,40 +1276,40 @@ enum RelatoCLI {
             Endpoints and response schemas can change without notice.
 
             Authentication:
-              relato web auth login --apple-id EMAIL [--two-factor-code-command COMMAND]
+              xcfb web auth login --apple-id EMAIL [--two-factor-code-command COMMAND]
                 Performs Apple Account SRP authentication directly from Swift. The password
                 is read from a secure terminal prompt by default and is never stored.
                 Trusted-device and trusted-phone two-factor challenges are supported.
-                RelatoKit stores only the resulting cookies and a one-way account hash.
+                xcfb stores only the resulting cookies and a one-way account hash.
 
-              relato web auth status
+              xcfb web auth status
                 Validates the cached session against Feedback Assistant.
 
-              relato web auth logout
+              xcfb web auth logout
                 Deletes the local session from the selected backend. It does not revoke
                 Apple sessions.
 
             Login options and environment:
               --apple-id EMAIL
-                Apple Account email. Defaults to RELATO_WEB_APPLE_ID.
+                Apple Account email. Defaults to XCFB_WEB_APPLE_ID.
 
               --two-factor-code-command COMMAND
                 Runs COMMAND for each requested verification code and reads the code from
-                stdout. Defaults to RELATO_WEB_2FA_CODE_COMMAND. Without a command, an
+                stdout. Defaults to XCFB_WEB_2FA_CODE_COMMAND. Without a command, an
                 interactive terminal prompt is used.
 
-              RELATO_WEB_PASSWORD
+              XCFB_WEB_PASSWORD
                 Supplies the password non-interactively. A secure terminal prompt is safer
                 for human use because environment variables may be exposed to child
                 processes or shell tooling.
 
-              RELATO_WEB_SESSION_BACKEND
+              XCFB_WEB_SESSION_BACKEND
                 Selects file or keychain session storage. The default is file, which avoids
                 recurring Keychain approval prompts for locally rebuilt unsigned binaries.
 
-              RELATO_WEB_SESSION_DIR
-                Overrides the file session directory. The default is ~/.relato/web.
-                RelatoKit enforces directory mode 0700 and session file mode 0600.
+              XCFB_WEB_SESSION_DIR
+                Overrides the file session directory. The default is ~/.xcfb/web.
+                xcfb enforces directory mode 0700 and session file mode 0600.
 
             Headless boundary:
               Password-based Apple Accounts, including trusted-device and trusted-phone 2FA,
@@ -1317,30 +1317,30 @@ enum RelatoCLI {
               accounts and Apple Account actions that require a browser are not supported.
 
             Inspection commands:
-              relato web inbox list [--locale LOCALE] [--team-id ID] [--compact]
-              relato web feedback view --id ID [--locale LOCALE] [--compact]
+              xcfb web inbox list [--locale LOCALE] [--team-id ID] [--compact]
+              xcfb web feedback view --id ID [--locale LOCALE] [--compact]
                 Reads Apple's server-backed feedback detail envelope, including the
                 submitted feedback ID and originating form-response ID.
 
-              relato web feedback status --id ID [--locale LOCALE] [--compact]
+              xcfb web feedback status --id ID [--locale LOCALE] [--compact]
                 Reads Apple's current status rows for a submitted feedback report.
 
-              relato web forms list [--locale LOCALE] [--team-id ID] [--compact]
-              relato web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]
-              relato web forms options --id ID [--tat TAT] [--locale LOCALE] [--team-id ID] [--compact]
+              xcfb web forms list [--locale LOCALE] [--team-id ID] [--compact]
+              xcfb web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]
+              xcfb web forms options --id ID [--tat TAT] [--locale LOCALE] [--team-id ID] [--compact]
                 Emits normalized question metadata and label/value pairs. Use --tat to
                 inspect one semantic field, such as :platform or :area.
 
             Draft commands:
-              relato web drafts create --form-id ID [--locale LOCALE] [--team-id ID] [--compact]
+              xcfb web drafts create --form-id ID [--locale LOCALE] [--team-id ID] [--compact]
                 Creates a server-backed draft for a form returned by `web forms list`.
                 The Apple response, including the new form response ID, is emitted as JSON.
 
-              relato web drafts view --id ID [--locale LOCALE] [--compact]
+              xcfb web drafts view --id ID [--locale LOCALE] [--compact]
                 Reads a server-backed draft, including its form ID, saved answers, and
                 attachment records.
 
-              relato web drafts update --id ID [--payload PATH] [field options] [--answer TAT=VALUE]... [--locale LOCALE] [--compact]
+              xcfb web drafts update --id ID [--payload PATH] [field options] [--answer TAT=VALUE]... [--locale LOCALE] [--compact]
                 Fetches the current draft and form schema, preserves untouched answers,
                 resolves choice labels to Apple's values, validates text limits, and saves
                 the complete answer set.
@@ -1356,25 +1356,25 @@ enum RelatoCLI {
                   --foundation-models-mode feedback|samples|APPLE_VALUE
 
                 --payload imports title, description, platform, category area, and kind
-                from a `relato prepare` JSON payload. Explicit named options override it.
+                from a `xcfb prepare` JSON payload. Explicit named options override it.
                 Repeat --answer TAT=VALUE for conditional or form-specific questions.
                 Repeating the same TAT supplies multiple checkbox values.
 
-              relato web drafts attach --id ID [--file PATH]... [--payload PATH] [--locale LOCALE] [--compact]
+              xcfb web drafts attach --id ID [--file PATH]... [--payload PATH] [--locale LOCALE] [--compact]
                 Uploads one or more local files through Apple's file-promise sequence:
                 create, mark uploading, obtain a presigned object URL, upload raw bytes,
                 mark uploaded, and verify the persisted file promise from the draft.
 
                 Repeat --file to attach multiple files. --payload attaches the snapshot
-                path from a `relato prepare` JSON payload. Duplicate paths are uploaded once.
+                path from a `xcfb prepare` JSON payload. Duplicate paths are uploaded once.
                 The command emits verified attachment receipts and never prints presigned URLs.
 
-              relato web drafts validate --id ID [--locale LOCALE] [--compact]
+              xcfb web drafts validate --id ID [--locale LOCALE] [--compact]
                 Fetches the draft and its current form schema, evaluates Apple's conditional
                 required fields, treats an uploaded file promise as satisfying a visible
                 Required File Zone, and emits a machine-readable readiness result.
 
-              relato web drafts submit --id ID --confirm [--locale LOCALE] [--compact]
+              xcfb web drafts submit --id ID --confirm [--locale LOCALE] [--compact]
                 Saves the complete answer set using Apple's submission representation,
                 submits the server-backed draft, and verifies the returned feedback ID
                 through Apple's feedback-detail endpoint.
@@ -1397,7 +1397,7 @@ enum RelatoCLI {
 }
 
 do {
-    try await RelatoCLI.run(Array(CommandLine.arguments.dropFirst()))
+    try await XCFBCLI.run(Array(CommandLine.arguments.dropFirst()))
 } catch {
     FileHandle.standardError.write(Data("error: \(error)\n".utf8))
     Foundation.exit(1)

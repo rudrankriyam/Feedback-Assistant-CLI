@@ -104,7 +104,7 @@ public struct FeedbackWebFormSchema: Decodable, Sendable {
             let normalized = Self.normalizedTAT(tat)
             selectedQuestions = questions.filter { Self.normalizedTAT($0.tat) == normalized }
             guard !selectedQuestions.isEmpty else {
-                throw RelatoError.invalidArgument("Form \(id) has no question with TAT \(normalized)")
+                throw XCFBError.invalidArgument("Form \(id) has no question with TAT \(normalized)")
             }
         } else {
             selectedQuestions = questions
@@ -284,7 +284,7 @@ public enum FeedbackWebDraftEditor {
         updates: [String: [String]]
     ) throws -> [FeedbackWebAnswerMutation] {
         guard !updates.isEmpty else {
-            throw RelatoError.invalidArgument("At least one draft answer update is required")
+            throw XCFBError.invalidArgument("At least one draft answer update is required")
         }
 
         var questionsByID: [Int: FeedbackWebQuestion] = [:]
@@ -301,13 +301,13 @@ public enum FeedbackWebDraftEditor {
         for (tat, values) in updates {
             let normalized = FeedbackWebFormSchema.normalizedTAT(tat)
             guard !normalized.isEmpty else {
-                throw RelatoError.invalidArgument("Draft answer TAT cannot be empty")
+                throw XCFBError.invalidArgument("Draft answer TAT cannot be empty")
             }
             normalizedUpdates[normalized] = values
         }
 
         for tat in normalizedUpdates.keys where questionsByTAT[tat] == nil {
-            throw RelatoError.invalidArgument("Form \(form.id) has no question with TAT \(tat)")
+            throw XCFBError.invalidArgument("Form \(form.id) has no question with TAT \(tat)")
         }
 
         var mutations = draft.answers.map { answer -> FeedbackWebAnswerMutation in
@@ -357,14 +357,14 @@ public enum FeedbackWebDraftEditor {
         for question: FeedbackWebQuestion
     ) throws -> [String] {
         guard !values.isEmpty, values.allSatisfy({ !$0.isEmpty }) else {
-            throw RelatoError.invalidArgument(
+            throw XCFBError.invalidArgument(
                 "Answer \(FeedbackWebFormSchema.normalizedTAT(question.tat)) requires a value"
             )
         }
 
         let widget = question.answerWidget.lowercased()
         if widget.contains("information") || widget.contains("file") {
-            throw RelatoError.invalidArgument(
+            throw XCFBError.invalidArgument(
                 "Question \(FeedbackWebFormSchema.normalizedTAT(question.tat)) cannot be set as a text answer"
             )
         }
@@ -372,7 +372,7 @@ public enum FeedbackWebDraftEditor {
         let choices = question.choices.filter { !$0.isPlaceholder }
         if !choices.isEmpty {
             if widget != "check box" && values.count != 1 {
-                throw RelatoError.invalidArgument(
+                throw XCFBError.invalidArgument(
                     "Question \(FeedbackWebFormSchema.normalizedTAT(question.tat)) accepts one value"
                 )
             }
@@ -381,9 +381,9 @@ public enum FeedbackWebDraftEditor {
                     let labels = choices.prefix(12).map(\.label).joined(separator: ", ")
                     let suffix =
                         choices.count > 12
-                        ? ", ... Use `relato web forms options --id FORM_ID --tat \(FeedbackWebFormSchema.normalizedTAT(question.tat))` to inspect all values."
+                        ? ", ... Use `xcfb web forms options --id FORM_ID --tat \(FeedbackWebFormSchema.normalizedTAT(question.tat))` to inspect all values."
                         : ""
-                    throw RelatoError.invalidArgument(
+                    throw XCFBError.invalidArgument(
                         "Invalid value for \(FeedbackWebFormSchema.normalizedTAT(question.tat)): \(value). Expected one of: \(labels)\(suffix)"
                     )
                 }
@@ -392,7 +392,7 @@ public enum FeedbackWebDraftEditor {
         }
 
         guard values.count == 1 else {
-            throw RelatoError.invalidArgument(
+            throw XCFBError.invalidArgument(
                 "Question \(FeedbackWebFormSchema.normalizedTAT(question.tat)) accepts one value"
             )
         }
@@ -406,7 +406,7 @@ public enum FeedbackWebDraftEditor {
             limit = nil
         }
         if let limit, values[0].count > limit {
-            throw RelatoError.invalidArgument(
+            throw XCFBError.invalidArgument(
                 "Answer \(FeedbackWebFormSchema.normalizedTAT(question.tat)) exceeds Apple's \(limit)-character limit"
             )
         }

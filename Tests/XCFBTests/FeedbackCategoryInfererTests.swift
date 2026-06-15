@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import RelatoKit
+@testable import XCFBCore
 
 private struct CategoryExpectation {
     var title: String

@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import RelatoKit
+@testable import XCFBCore
 
 @Test func webSessionBuildsScopedCookieAndCSRFHeaders() throws {
     let future = Date().addingTimeInterval(3_600)
@@ -157,7 +157,7 @@ import Testing
 
 @Test func webFileSessionStoreUsesOwnerOnlyPermissions() throws {
     let directoryURL = FileManager.default.temporaryDirectory
-        .appendingPathComponent("relato-web-session-\(UUID().uuidString)")
+        .appendingPathComponent("xcfb-web-session-\(UUID().uuidString)")
     let store = FeedbackWebSessionStore(
         backend: .file,
         directoryURL: directoryURL
@@ -187,7 +187,7 @@ import Testing
 
 @Test func webFileSessionStoreHandlesConcurrentSaves() async throws {
     let directoryURL = FileManager.default.temporaryDirectory
-        .appendingPathComponent("relato-web-session-\(UUID().uuidString)")
+        .appendingPathComponent("xcfb-web-session-\(UUID().uuidString)")
     let store = FeedbackWebSessionStore(
         backend: .file,
         directoryURL: directoryURL
@@ -218,7 +218,7 @@ import Testing
 
 @Test func webFileSessionStoreMergesCookiesFromStaleSessions() throws {
     let directoryURL = FileManager.default.temporaryDirectory
-        .appendingPathComponent("relato-web-session-\(UUID().uuidString)")
+        .appendingPathComponent("xcfb-web-session-\(UUID().uuidString)")
     let store = FeedbackWebSessionStore(
         backend: .file,
         directoryURL: directoryURL
@@ -261,7 +261,7 @@ import Testing
 
 @Test func webFileSessionStoreRejectsBroadDirectoryWithoutChangingIt() throws {
     let directoryURL = FileManager.default.temporaryDirectory
-        .appendingPathComponent("relato-web-session-\(UUID().uuidString)")
+        .appendingPathComponent("xcfb-web-session-\(UUID().uuidString)")
     try FileManager.default.createDirectory(
         at: directoryURL,
         withIntermediateDirectories: true,
@@ -277,7 +277,7 @@ import Testing
         directoryURL: directoryURL
     )
 
-    #expect(throws: RelatoError.self) {
+    #expect(throws: XCFBError.self) {
         try store.save(FeedbackWebSession(cookies: []))
     }
     let attributes = try FileManager.default.attributesOfItem(atPath: directoryURL.path)
@@ -286,7 +286,7 @@ import Testing
 
 @Test func webKeychainSessionStoreHandlesConcurrentInitialSaves() async throws {
     let store = FeedbackWebSessionStore(
-        service: "com.rryam.RelatoKit.tests.\(UUID().uuidString)",
+        service: "com.rryam.xcfb.tests.\(UUID().uuidString)",
         backend: .keychain
     )
     defer { try? store.delete() }
@@ -767,7 +767,7 @@ struct FeedbackWebClientTests {
                     """#.utf8
                 )
             default:
-                throw RelatoError.web(
+                throw XCFBError.web(
                     "unexpected mock attachment request: \(request.httpMethod ?? "") \(url)"
                 )
             }
@@ -862,7 +862,7 @@ struct FeedbackWebClientTests {
                 status = 500
                 responseBody = Data()
             default:
-                throw RelatoError.web(
+                throw XCFBError.web(
                     "unexpected mock failed-upload request: \(request.httpMethod ?? "") \(url)"
                 )
             }
@@ -1000,7 +1000,7 @@ struct FeedbackWebClientTests {
                         .utf8
                 )
             default:
-                throw RelatoError.web(
+                throw XCFBError.web(
                     "unexpected mock submission request: \(request.httpMethod ?? "") \(url)"
                 )
             }
@@ -1104,7 +1104,7 @@ struct FeedbackWebClientTests {
                     """#.utf8
                 )
             default:
-                throw RelatoError.web(
+                throw XCFBError.web(
                     "unexpected mock preflight request: \(request.httpMethod ?? "") \(url)"
                 )
             }
@@ -1122,7 +1122,7 @@ struct FeedbackWebClientTests {
             session: FeedbackWebSession(cookies: []),
             configuration: configuration
         )
-        await #expect(throws: RelatoError.self) {
+        await #expect(throws: XCFBError.self) {
             try await client.submitDraft(id: "104688952")
         }
         #expect(FeedbackWebMockURLProtocol.requests.map(\.httpMethod) == ["GET", "GET"])
@@ -1155,7 +1155,7 @@ struct FeedbackWebClientTests {
                     """#.utf8
                 )
             default:
-                throw RelatoError.web(
+                throw XCFBError.web(
                     "unexpected mock survey request: \(request.httpMethod ?? "") \(url)"
                 )
             }
@@ -1173,7 +1173,7 @@ struct FeedbackWebClientTests {
             session: FeedbackWebSession(cookies: []),
             configuration: configuration
         )
-        await #expect(throws: RelatoError.self) {
+        await #expect(throws: XCFBError.self) {
             try await client.submitDraft(id: "104688952")
         }
         #expect(FeedbackWebMockURLProtocol.requests.map(\.httpMethod) == ["GET", "GET"])
@@ -1217,7 +1217,7 @@ private final class FeedbackWebMockURLProtocol: URLProtocol, @unchecked Sendable
         Self.requestBodies.append(Self.lastRequestBody)
         do {
             guard let handler = Self.handler else {
-                throw RelatoError.web("missing mock URL handler")
+                throw XCFBError.web("missing mock URL handler")
             }
             let (response, data) = try handler(request)
             client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)

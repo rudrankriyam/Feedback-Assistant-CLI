@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import RelatoKit
+@testable import XCFBCore
 
 @Test func webSubmissionPreflightHandlesConditionalRequiredFileZone() throws {
     let form = try JSONDecoder().decode(

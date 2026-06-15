@@ -1,9 +1,9 @@
-#ifndef RELATO_NATIVE_AUTOMATION_H
-#define RELATO_NATIVE_AUTOMATION_H
+#ifndef XCFB_NATIVE_AUTOMATION_H
+#define XCFB_NATIVE_AUTOMATION_H
 
 #include <stdbool.h>
 
-int RelatoFeedbackAssistantFill(
+int XCFBFeedbackAssistantFill(
     const char *title,
     const char *description,
     const char *topic,
@@ -17,6 +17,6 @@ int RelatoFeedbackAssistantFill(
     char **errorOut
 );
 
-void RelatoFeedbackAssistantFree(char *value);
+void XCFBFeedbackAssistantFree(char *value);
 
 #endif

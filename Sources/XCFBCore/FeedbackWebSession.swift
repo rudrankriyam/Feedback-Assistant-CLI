@@ -189,9 +189,9 @@ public enum FeedbackWebSessionBackend: String, Sendable {
 }
 
 public struct FeedbackWebSessionStore: Sendable {
-    public static let defaultService = "com.rryam.RelatoKit.feedback-web-session"
-    public static let backendEnvironment = "RELATO_WEB_SESSION_BACKEND"
-    public static let directoryEnvironment = "RELATO_WEB_SESSION_DIR"
+    public static let defaultService = "com.rryam.xcfb.feedback-web-session"
+    public static let backendEnvironment = "XCFB_WEB_SESSION_BACKEND"
+    public static let directoryEnvironment = "XCFB_WEB_SESSION_DIR"
 
     private let service: String
     private let account: String
@@ -239,7 +239,7 @@ public struct FeedbackWebSessionStore: Sendable {
                 let requestAccount = session.accountIdentifierHash,
                 storedAccount != requestAccount
             {
-                throw RelatoError.web(
+                throw XCFBError.web(
                     "cached web session changed while the request was in flight; retry"
                 )
             }
@@ -303,7 +303,7 @@ public struct FeedbackWebSessionStore: Sendable {
             )
         }
         return FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".relato", isDirectory: true)
+            .appendingPathComponent(".xcfb", isDirectory: true)
             .appendingPathComponent("web", isDirectory: true)
     }
 
@@ -317,7 +317,7 @@ public struct FeedbackWebSessionStore: Sendable {
         do {
             data = try Data(contentsOf: sessionFileURL)
         } catch {
-            throw RelatoError.web("could not read the cached web session")
+            throw XCFBError.web("could not read the cached web session")
         }
         return try decodeSession(data)
     }
@@ -333,7 +333,7 @@ public struct FeedbackWebSessionStore: Sendable {
             contents: data,
             attributes: [.posixPermissions: 0o600]
         ) else {
-            throw RelatoError.web("could not write the cached web session")
+            throw XCFBError.web("could not write the cached web session")
         }
         defer { try? FileManager.default.removeItem(at: temporaryURL) }
 
@@ -343,7 +343,7 @@ public struct FeedbackWebSessionStore: Sendable {
                 ofItemAtPath: temporaryURL.path
             )
         } catch {
-            throw RelatoError.web("could not secure the cached web session")
+            throw XCFBError.web("could not secure the cached web session")
         }
         guard Darwin.rename(temporaryURL.path, sessionFileURL.path) == 0 else {
             throw fileError(operation: "finalize")
@@ -356,7 +356,7 @@ public struct FeedbackWebSessionStore: Sendable {
         } catch CocoaError.fileNoSuchFile {
             return
         } catch {
-            throw RelatoError.web("could not delete the cached web session")
+            throw XCFBError.web("could not delete the cached web session")
         }
     }
 
@@ -438,29 +438,23 @@ public struct FeedbackWebSessionStore: Sendable {
             .map { String(format: "%02x", $0) }
             .joined()
         return FileManager.default.temporaryDirectory
-            .appendingPathComponent("relato-feedback-web-session-\(identifier).lock")
+            .appendingPathComponent("xcfb-feedback-web-session-\(identifier).lock")
     }
 
     private func withStoreLock<T>(_ operation: () throws -> T) throws -> T {
-        let descriptor = Darwin.open(
-            lockURL.path,
-            O_CREAT | O_RDWR,
-            S_IRUSR | S_IWUSR
-        )
+        var descriptor: Int32
+        repeat {
+            descriptor = Darwin.open(
+                lockURL.path,
+                O_CREAT | O_RDWR | O_EXLOCK | O_NOFOLLOW,
+                S_IRUSR | S_IWUSR
+            )
+        } while descriptor < 0 && errno == EINTR
         guard descriptor >= 0 else {
-            throw lockError(operation: "open")
-        }
-        defer {
-            _ = Darwin.lockf(descriptor, F_ULOCK, 0)
-            _ = Darwin.close(descriptor)
-        }
-
-        while Darwin.lockf(descriptor, F_LOCK, 0) != 0 {
-            if errno == EINTR {
-                continue
-            }
             throw lockError(operation: "acquire")
         }
+        defer { _ = Darwin.close(descriptor) }
+
         return try operation()
     }
 
@@ -469,17 +463,26 @@ public struct FeedbackWebSessionStore: Sendable {
         if fileManager.fileExists(atPath: directoryURL.path) {
             try validateSessionDirectory()
             return
-        } else {
-            do {
-                try fileManager.createDirectory(
-                    at: directoryURL,
-                    withIntermediateDirectories: true,
-                    attributes: [.posixPermissions: 0o700]
-                )
-            } catch {
-                throw RelatoError.web("could not create the web session cache directory")
-            }
         }
+
+        do {
+            try fileManager.createDirectory(
+                at: directoryURL,
+                withIntermediateDirectories: true,
+                attributes: [.posixPermissions: 0o700]
+            )
+        } catch {
+            throw XCFBError.web("could not create the web session cache directory")
+        }
+        do {
+            try fileManager.setAttributes(
+                [.posixPermissions: 0o700],
+                ofItemAtPath: directoryURL.path
+            )
+        } catch {
+            throw XCFBError.web("could not secure the web session cache directory")
+        }
+        try validateSessionDirectory()
     }
 
     private func validateSessionDirectory() throws {
@@ -487,22 +490,22 @@ public struct FeedbackWebSessionStore: Sendable {
         do {
             attributes = try FileManager.default.attributesOfItem(atPath: directoryURL.path)
         } catch {
-            throw RelatoError.web("could not inspect the web session cache directory")
+            throw XCFBError.web("could not inspect the web session cache directory")
         }
         guard attributes[.type] as? FileAttributeType == .typeDirectory else {
-            throw RelatoError.web(
+            throw XCFBError.web(
                 "web session cache path is not a directory: \(directoryURL.path)"
             )
         }
         if let ownerID = attributes[.ownerAccountID] as? NSNumber,
             ownerID.uint32Value != Darwin.getuid()
         {
-            throw RelatoError.web("web session cache directory is owned by another user")
+            throw XCFBError.web("web session cache directory is owned by another user")
         }
         if let permissions = attributes[.posixPermissions] as? NSNumber,
             permissions.intValue & 0o077 != 0
         {
-            throw RelatoError.web(
+            throw XCFBError.web(
                 "web session cache directory permissions are too broad; use a private directory with mode 700"
             )
         }
@@ -513,20 +516,20 @@ public struct FeedbackWebSessionStore: Sendable {
         do {
             attributes = try FileManager.default.attributesOfItem(atPath: sessionFileURL.path)
         } catch {
-            throw RelatoError.web("could not inspect the cached web session")
+            throw XCFBError.web("could not inspect the cached web session")
         }
         guard attributes[.type] as? FileAttributeType == .typeRegular else {
-            throw RelatoError.web("cached web session is not a regular file")
+            throw XCFBError.web("cached web session is not a regular file")
         }
         if let ownerID = attributes[.ownerAccountID] as? NSNumber,
             ownerID.uint32Value != Darwin.getuid()
         {
-            throw RelatoError.web("cached web session is owned by another user")
+            throw XCFBError.web("cached web session is owned by another user")
         }
         if let permissions = attributes[.posixPermissions] as? NSNumber,
             permissions.intValue & 0o077 != 0
         {
-            throw RelatoError.web(
+            throw XCFBError.web(
                 "cached web session permissions are too broad; run `chmod 600 \(sessionFileURL.path)`"
             )
         }
@@ -536,7 +539,7 @@ public struct FeedbackWebSessionStore: Sendable {
         do {
             return try JSONDecoder().decode(FeedbackWebSession.self, from: data)
         } catch {
-            throw RelatoError.web("could not decode the cached web session")
+            throw XCFBError.web("could not decode the cached web session")
         }
     }
 
@@ -544,21 +547,21 @@ public struct FeedbackWebSessionStore: Sendable {
         do {
             return try JSONEncoder().encode(session)
         } catch {
-            throw RelatoError.web("could not encode the web session")
+            throw XCFBError.web("could not encode the web session")
         }
     }
 
-    private func keychainError(operation: String, status: OSStatus) -> RelatoError {
+    private func keychainError(operation: String, status: OSStatus) -> XCFBError {
         let message = SecCopyErrorMessageString(status, nil) as String? ?? "status \(status)"
         return .web("could not \(operation) Keychain session: \(message)")
     }
 
-    private func lockError(operation: String) -> RelatoError {
+    private func lockError(operation: String) -> XCFBError {
         let message = String(cString: strerror(errno))
         return .web("could not \(operation) web session lock: \(message)")
     }
 
-    private func fileError(operation: String) -> RelatoError {
+    private func fileError(operation: String) -> XCFBError {
         let message = String(cString: strerror(errno))
         return .web("could not \(operation) cached web session: \(message)")
     }

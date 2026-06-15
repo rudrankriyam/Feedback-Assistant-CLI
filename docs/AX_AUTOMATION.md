@@ -1,6 +1,6 @@
 # AX Automation
 
-RelatoKit uses macOS Accessibility APIs for native Feedback Assistant automation. The native form driver is implemented in Objective-C with `AXUIElement` and fail-closed handling for native controls Feedback Assistant does not expose cleanly.
+xcfb uses macOS Accessibility APIs for native Feedback Assistant automation. The native form driver is implemented in Objective-C with `AXUIElement` and fail-closed handling for native controls Feedback Assistant does not expose cleanly.
 
 The AX driver works by:
 
@@ -29,16 +29,16 @@ AX can drive many native controls without AppleScript:
 
 ## Practical Limits
 
-AX is still native UI automation. It depends on the target app exposing useful Accessibility elements. RelatoKit intentionally does not synthesize keyboard input, move the pointer, click screen coordinates, or use the pasteboard. Text-only fill stays in the background. Popup selection briefly activates Feedback Assistant because its SwiftUI menus do not expose selectable children while hidden.
+AX is still native UI automation. It depends on the target app exposing useful Accessibility elements. xcfb intentionally does not synthesize keyboard input, move the pointer, click screen coordinates, or use the pasteboard. Text-only fill stays in the background. Popup selection briefly activates Feedback Assistant because its SwiftUI menus do not expose selectable children while hidden.
 
-If AX mutation fails or a requested menu item is absent, RelatoKit fails closed and reports the unsupported native-control boundary.
+If AX mutation fails or a requested menu item is absent, xcfb fails closed and reports the unsupported native-control boundary.
 
-We tested the stronger macOS background-input pattern used by tools such as [Cua](https://github.com/trycua/cua) and [Peekaboo](https://github.com/openclaw/Peekaboo): hidden window inspection, SkyLight per-PID event posting, focus-without-raise, AX direct value setting, and process-targeted keyboard events. That route can mutate and render hidden Feedback Assistant text fields, which validates RelatoKit's hidden text-field strategy. It did not make Feedback Assistant's SwiftUI popups selectable while hidden. RelatoKit therefore uses a narrow, explicit foreground step for `--select-popups`, followed by its normal hide behavior.
+Background-input evaluation covered the techniques used by tools such as [Cua](https://github.com/trycua/cua) and [Peekaboo](https://github.com/openclaw/Peekaboo): hidden window inspection, SkyLight per-PID event posting, focus-without-raise, AX direct value setting, and process-targeted keyboard events. Those techniques can mutate and render hidden Feedback Assistant text fields, but they do not make its SwiftUI popups selectable while hidden. xcfb therefore uses a narrow, explicit foreground step for `--select-popups`, followed by its normal hide behavior.
 
-RelatoKit does not shell out to Cua or Peekaboo at runtime. Their implementations informed the boundary test and the no-input-stealing design; RelatoKit keeps the production path small and local.
+Cua and Peekaboo are not runtime dependencies. xcfb keeps the native automation implementation local and avoids input-stealing event synthesis.
 
-Some forms do not support every report kind. For example, a macOS form can accept `Incorrect/Unexpected Behavior` while rejecting `Suggestion` for its type popup. In those cases RelatoKit reports the failing native value instead of pretending the form was completed.
+Some forms do not support every report kind. For example, a macOS form can accept `Incorrect/Unexpected Behavior` while rejecting `Suggestion` for its type popup. In those cases xcfb reports the failing native value instead of pretending the form was completed.
 
-Local file attachments use draft-folder staging. Once Feedback Assistant creates a draft, RelatoKit copies the snapshot into `~/Library/Group Containers/group.com.apple.feedback/Library/Drafts/FB/<draft-id>/` and prints the staged path. RelatoKit does not drive the visible Add Attachment > `Choose File...` picker because Feedback Assistant does not reliably open that transient menu while inactive.
+Local file attachments use draft-folder staging. Once Feedback Assistant creates a draft, xcfb copies the snapshot into `~/Library/Group Containers/group.com.apple.feedback/Library/Drafts/FB/<draft-id>/` and prints the staged path. xcfb does not drive the visible Add Attachment > `Choose File...` picker because Feedback Assistant does not reliably open that transient menu while inactive.
 
 For fully isolated automation that never activates Feedback Assistant on the user's primary desktop, omit `--select-popups` and complete native menus manually later, or run the full native workflow in a separate macOS GUI session or virtual machine.

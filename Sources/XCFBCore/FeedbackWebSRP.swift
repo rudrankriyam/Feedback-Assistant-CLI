@@ -30,7 +30,7 @@ enum FeedbackWebSRP {
         var bytes = [UInt8](repeating: 0, count: byteCount)
         let status = SecRandomCopyBytes(kSecRandomDefault, byteCount, &bytes)
         guard status == errSecSuccess else {
-            throw RelatoError.web("could not generate Apple authentication key material")
+            throw XCFBError.web("could not generate Apple authentication key material")
         }
         return Data(bytes)
     }
@@ -53,7 +53,7 @@ enum FeedbackWebSRP {
         case "s2k_fo":
             preparedPassword = Data(passwordDigest.hexString.utf8)
         default:
-            throw RelatoError.web("Apple returned unsupported SRP protocol \(protocolName)")
+            throw XCFBError.web("Apple returned unsupported SRP protocol \(protocolName)")
         }
         return try pbkdf2SHA256(
             password: preparedPassword,
@@ -74,7 +74,7 @@ enum FeedbackWebSRP {
         let privateValue = BigUInt(secret)
         let serverValue = BigUInt(serverPublicValue)
         guard !serverValue.isZero, !(serverValue % modulus).isZero else {
-            throw RelatoError.web("Apple returned an invalid SRP server value")
+            throw XCFBError.web("Apple returned an invalid SRP server value")
         }
 
         let inner = sha256(Data([0x3A]) + derivedPassword)
@@ -92,7 +92,7 @@ enum FeedbackWebSRP {
             )
         )
         guard !scramblingParameter.isZero else {
-            throw RelatoError.web("Apple returned an invalid SRP scrambling parameter")
+            throw XCFBError.web("Apple returned an invalid SRP scrambling parameter")
         }
 
         let gx = generator.power(x, modulus: modulus)
@@ -133,7 +133,7 @@ enum FeedbackWebSRP {
         date: Date = Date()
     ) throws -> String {
         guard bits >= 0, bits <= Insecure.SHA1.byteCount * 8 else {
-            throw RelatoError.web("Apple returned an invalid hashcash difficulty")
+            throw XCFBError.web("Apple returned an invalid hashcash difficulty")
         }
 
         let formatter = DateFormatter()
@@ -175,7 +175,7 @@ enum FeedbackWebSRP {
         let width = serializedNumber(modulus).count
         let data = serializedNumber(value)
         guard data.count <= width else {
-            throw RelatoError.web("Apple SRP value exceeds the group width")
+            throw XCFBError.web("Apple SRP value exceeds the group width")
         }
         return Data(repeating: 0, count: width - data.count) + data
     }
@@ -201,7 +201,7 @@ enum FeedbackWebSRP {
         keyLength: Int
     ) throws -> Data {
         guard iterations > 0, keyLength > 0 else {
-            throw RelatoError.web("Apple returned invalid password derivation parameters")
+            throw XCFBError.web("Apple returned invalid password derivation parameters")
         }
 
         let key = SymmetricKey(data: password)

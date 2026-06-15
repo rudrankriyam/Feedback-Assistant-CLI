@@ -68,7 +68,7 @@ public struct PreparedFeedback: Codable, Equatable {
         }
 
         guard let url = components?.url else {
-            throw RelatoError.invalidArgument("Could not build prepared feedback URL")
+            throw XCFBError.invalidArgument("Could not build prepared feedback URL")
         }
         return url
     }

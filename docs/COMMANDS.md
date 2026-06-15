@@ -1,18 +1,18 @@
 # Command Reference
 
-This file is generated from live CLI help output. RelatoKit is optimized for agent-driven Feedback Assistant workflows.
+This file is generated from live CLI help output. xcfb is optimized for agent-driven Feedback Assistant workflows.
 
 ## Agent Flow
 
 1. Research the issue and write supporting evidence to a local file.
-2. Run `relato prepare` to create `feedback-submission.json` and `feedback-submission.md`.
+2. Run `xcfb prepare` to create `feedback-submission.json` and `feedback-submission.md`.
 3. Inspect both files before touching the native app.
-4. Run `relato submit --dry-run --select-popups --payload feedback-submission.json`.
-5. Run `relato submit --select-popups --payload feedback-submission.json` to fill safe fields, select known native popups, stage attachments, and stop before Submit.
+4. Run `xcfb submit --dry-run --select-popups --payload feedback-submission.json`.
+5. Run `xcfb submit --select-popups --payload feedback-submission.json` to fill safe fields, select known native popups, stage attachments, and stop before Submit.
 6. Inspect Feedback Assistant for native-only fields, popups, diagnostics, and staged attachments.
 7. Use `--confirm` only after explicit user confirmation.
-8. Use `relato store list` and `relato store uploads` as local evidence afterward; they are not Apple server receipts.
-9. Keep `relato web` isolated as an experimental server-backed workflow; require `--confirm` for submission.
+8. Use `xcfb store list` and `xcfb store uploads` as local evidence afterward; they are not Apple server receipts.
+9. Keep `xcfb web` isolated as an experimental server-backed workflow; require `--confirm` for submission.
 
 ## Payload Contract
 
@@ -24,62 +24,62 @@ This file is generated from live CLI help output. RelatoKit is optimized for age
 ## Global Help
 
 ```sh
-relato: agent-first tooling for Apple Feedback Assistant workflows
+xcfb: agent-first tooling for Apple Feedback Assistant workflows
 
-RelatoKit is designed for coding agents preparing useful Feedback Assistant
+xcfb is designed for coding agents preparing useful Feedback Assistant
 reports. Its stable workflow uses Apple's native macOS app. The experimental
 `web` command family provides headless access to Apple's undocumented
 Feedback Assistant web service after an explicit Apple Account login.
 
 Agent workflow:
   1. Research the issue and write any supporting evidence to a local file.
-  2. Run `relato prepare` to create the payload pair:
-       feedback-submission.json  machine-readable contract for relato
+  2. Run `xcfb prepare` to create the payload pair:
+       feedback-submission.json  machine-readable contract for xcfb
        feedback-submission.md    human-readable report for review/logs
   3. Inspect the Markdown and JSON before touching the native app.
-  4. Run `relato submit --dry-run --select-popups --payload feedback-submission.json`.
-  5. Run `relato submit --select-popups --payload feedback-submission.json`
+  4. Run `xcfb submit --dry-run --select-popups --payload feedback-submission.json`.
+  5. Run `xcfb submit --select-popups --payload feedback-submission.json`
      to open, fill, and select known native popups without submitting.
   6. Inspect Feedback Assistant for native-only fields, diagnostics, and files.
   7. Only after explicit user confirmation, run with `--confirm`.
-  8. Use `relato store list` and `relato store uploads` as local evidence.
+  8. Use `xcfb store list` and `xcfb store uploads` as local evidence.
 
 Commands:
-  relato version
-  relato store summary [--db PATH]
-  relato store list [--limit N] [--db PATH]
-  relato store uploads [--limit N] [--db PATH]
-  relato categories [--db PATH]
-  relato categorize --title TEXT [--description TEXT] [--bundle-id ID]
-  relato prepare --title TEXT --description TEXT [--snapshot PATH] [--bundle-id ID] [--platform PLATFORM] [--kind bug|suggestion] [--output-dir DIR]
-  relato routes
-  relato open ROUTE [--id ID] [--print-only]
-  relato open-native [--payload PATH]
-  relato fill [--payload PATH] [--select-popups]
-  relato submit [--payload PATH] [--select-popups] [--wait-seconds N] [--verify-wait-seconds N] [--db PATH] [--confirm] [--verify-store] [--dry-run]
-  relato web auth login --apple-id EMAIL [--two-factor-code-command COMMAND]
-  relato web auth status
-  relato web auth logout
-  relato web inbox list [--locale LOCALE] [--team-id ID] [--compact]
-  relato web feedback view --id ID [--locale LOCALE] [--compact]
-  relato web feedback status --id ID [--locale LOCALE] [--compact]
-  relato web forms list [--locale LOCALE] [--team-id ID] [--compact]
-  relato web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]
-  relato web forms options --id ID [--tat TAT] [--locale LOCALE] [--team-id ID] [--compact]
-  relato web drafts create --form-id ID [--locale LOCALE] [--team-id ID] [--compact]
-  relato web drafts view --id ID [--locale LOCALE] [--compact]
-  relato web drafts update --id ID [--payload PATH] [field options] [--answer TAT=VALUE]... [--locale LOCALE] [--compact]
-  relato web drafts attach --id ID [--file PATH]... [--payload PATH] [--locale LOCALE] [--compact]
-  relato web drafts validate --id ID [--locale LOCALE] [--compact]
-  relato web drafts submit --id ID --confirm [--locale LOCALE] [--compact]
+  xcfb version
+  xcfb store summary [--db PATH]
+  xcfb store list [--limit N] [--db PATH]
+  xcfb store uploads [--limit N] [--db PATH]
+  xcfb categories [--db PATH]
+  xcfb categorize --title TEXT [--description TEXT] [--bundle-id ID]
+  xcfb prepare --title TEXT --description TEXT [--snapshot PATH] [--bundle-id ID] [--platform PLATFORM] [--kind bug|suggestion] [--output-dir DIR]
+  xcfb routes
+  xcfb open ROUTE [--id ID] [--print-only]
+  xcfb open-native [--payload PATH]
+  xcfb fill [--payload PATH] [--select-popups]
+  xcfb submit [--payload PATH] [--select-popups] [--wait-seconds N] [--verify-wait-seconds N] [--db PATH] [--confirm] [--verify-store] [--dry-run]
+  xcfb web auth login --apple-id EMAIL [--two-factor-code-command COMMAND]
+  xcfb web auth status
+  xcfb web auth logout
+  xcfb web inbox list [--locale LOCALE] [--team-id ID] [--compact]
+  xcfb web feedback view --id ID [--locale LOCALE] [--compact]
+  xcfb web feedback status --id ID [--locale LOCALE] [--compact]
+  xcfb web forms list [--locale LOCALE] [--team-id ID] [--compact]
+  xcfb web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]
+  xcfb web forms options --id ID [--tat TAT] [--locale LOCALE] [--team-id ID] [--compact]
+  xcfb web drafts create --form-id ID [--locale LOCALE] [--team-id ID] [--compact]
+  xcfb web drafts view --id ID [--locale LOCALE] [--compact]
+  xcfb web drafts update --id ID [--payload PATH] [field options] [--answer TAT=VALUE]... [--locale LOCALE] [--compact]
+  xcfb web drafts attach --id ID [--file PATH]... [--payload PATH] [--locale LOCALE] [--compact]
+  xcfb web drafts validate --id ID [--locale LOCALE] [--compact]
+  xcfb web drafts submit --id ID --confirm [--locale LOCALE] [--compact]
 
 Help topics:
-  relato help payload
-  relato help prepare
-  relato help submit
-  relato help fill
-  relato help store
-  relato help web
+  xcfb help payload
+  xcfb help prepare
+  xcfb help submit
+  xcfb help fill
+  xcfb help store
+  xcfb help web
 
 Safety:
   `--confirm` presses the native Submit button through Accessibility. It is not headless
@@ -91,7 +91,7 @@ Safety:
   Snapshot attachments are staged into the local Feedback Assistant draft
   folder in the background after the native draft exists.
 
-  `relato web` is unofficial and isolated from the stable native workflow.
+  `xcfb web` is unofficial and isolated from the stable native workflow.
   Its endpoints may change without notice. Draft creation, inspection, and
   schema-validated answer updates are supported. Attachment upload uses
   Apple's file-promise protocol and verifies the result from the draft.
@@ -107,43 +107,43 @@ make generate-command-docs
 
 ## Commands
 
-- `relato version`
-- `relato store summary [--db PATH]`
-- `relato store list [--limit N] [--db PATH]`
-- `relato store uploads [--limit N] [--db PATH]`
-- `relato categories [--db PATH]`
-- `relato categorize --title TEXT [--description TEXT] [--bundle-id ID]`
-- `relato prepare --title TEXT --description TEXT [--snapshot PATH] [--bundle-id ID] [--platform PLATFORM] [--kind bug|suggestion] [--output-dir DIR]`
-- `relato routes`
-- `relato open ROUTE [--id ID] [--print-only]`
-- `relato open-native [--payload PATH]`
-- `relato fill [--payload PATH] [--select-popups]`
-- `relato submit [--payload PATH] [--select-popups] [--wait-seconds N] [--verify-wait-seconds N] [--db PATH] [--confirm] [--verify-store] [--dry-run]`
-- `relato web auth login --apple-id EMAIL [--two-factor-code-command COMMAND]`
-- `relato web auth status`
-- `relato web auth logout`
-- `relato web inbox list [--locale LOCALE] [--team-id ID] [--compact]`
-- `relato web feedback view --id ID [--locale LOCALE] [--compact]`
-- `relato web feedback status --id ID [--locale LOCALE] [--compact]`
-- `relato web forms list [--locale LOCALE] [--team-id ID] [--compact]`
-- `relato web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]`
-- `relato web forms options --id ID [--tat TAT] [--locale LOCALE] [--team-id ID] [--compact]`
-- `relato web drafts create --form-id ID [--locale LOCALE] [--team-id ID] [--compact]`
-- `relato web drafts view --id ID [--locale LOCALE] [--compact]`
-- `relato web drafts update --id ID [--payload PATH] [field options] [--answer TAT=VALUE]... [--locale LOCALE] [--compact]`
-- `relato web drafts attach --id ID [--file PATH]... [--payload PATH] [--locale LOCALE] [--compact]`
-- `relato web drafts validate --id ID [--locale LOCALE] [--compact]`
-- `relato web drafts submit --id ID --confirm [--locale LOCALE] [--compact]`
+- `xcfb version`
+- `xcfb store summary [--db PATH]`
+- `xcfb store list [--limit N] [--db PATH]`
+- `xcfb store uploads [--limit N] [--db PATH]`
+- `xcfb categories [--db PATH]`
+- `xcfb categorize --title TEXT [--description TEXT] [--bundle-id ID]`
+- `xcfb prepare --title TEXT --description TEXT [--snapshot PATH] [--bundle-id ID] [--platform PLATFORM] [--kind bug|suggestion] [--output-dir DIR]`
+- `xcfb routes`
+- `xcfb open ROUTE [--id ID] [--print-only]`
+- `xcfb open-native [--payload PATH]`
+- `xcfb fill [--payload PATH] [--select-popups]`
+- `xcfb submit [--payload PATH] [--select-popups] [--wait-seconds N] [--verify-wait-seconds N] [--db PATH] [--confirm] [--verify-store] [--dry-run]`
+- `xcfb web auth login --apple-id EMAIL [--two-factor-code-command COMMAND]`
+- `xcfb web auth status`
+- `xcfb web auth logout`
+- `xcfb web inbox list [--locale LOCALE] [--team-id ID] [--compact]`
+- `xcfb web feedback view --id ID [--locale LOCALE] [--compact]`
+- `xcfb web feedback status --id ID [--locale LOCALE] [--compact]`
+- `xcfb web forms list [--locale LOCALE] [--team-id ID] [--compact]`
+- `xcfb web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]`
+- `xcfb web forms options --id ID [--tat TAT] [--locale LOCALE] [--team-id ID] [--compact]`
+- `xcfb web drafts create --form-id ID [--locale LOCALE] [--team-id ID] [--compact]`
+- `xcfb web drafts view --id ID [--locale LOCALE] [--compact]`
+- `xcfb web drafts update --id ID [--payload PATH] [field options] [--answer TAT=VALUE]... [--locale LOCALE] [--compact]`
+- `xcfb web drafts attach --id ID [--file PATH]... [--payload PATH] [--locale LOCALE] [--compact]`
+- `xcfb web drafts validate --id ID [--locale LOCALE] [--compact]`
+- `xcfb web drafts submit --id ID --confirm [--locale LOCALE] [--compact]`
 
 ## Topic Help
 
-### `relato help payload`
+### `xcfb help payload`
 
 ```sh
-relato prepare: create the payload pair agents should review and reuse
+xcfb prepare: create the payload pair agents should review and reuse
 
 Usage:
-  relato prepare --title TEXT --description TEXT [--snapshot PATH] [--bundle-id ID] [--platform PLATFORM] [--kind bug|suggestion] [--output-dir DIR]
+  xcfb prepare --title TEXT --description TEXT [--snapshot PATH] [--bundle-id ID] [--platform PLATFORM] [--kind bug|suggestion] [--output-dir DIR]
 
 Outputs:
   feedback-submission.json
@@ -168,24 +168,24 @@ Options:
   --output-dir DIR      Where to write the JSON and Markdown files.
 
 Agent pattern:
-  relato prepare \
+  xcfb prepare \
     --title "Foundation Models framework: add first-class video input support" \
     --description "$REPORT_BODY" \
     --snapshot ./evidence.md \
     --kind suggestion \
-    --output-dir /tmp/relato-report
+    --output-dir /tmp/xcfb-report
 
-  sed -n '1,220p' /tmp/relato-report/feedback-submission.md
-  relato submit --payload /tmp/relato-report/feedback-submission.json --dry-run
+  sed -n '1,220p' /tmp/xcfb-report/feedback-submission.md
+  xcfb submit --payload /tmp/xcfb-report/feedback-submission.json --dry-run
 ```
 
-### `relato help prepare`
+### `xcfb help prepare`
 
 ```sh
-relato prepare: create the payload pair agents should review and reuse
+xcfb prepare: create the payload pair agents should review and reuse
 
 Usage:
-  relato prepare --title TEXT --description TEXT [--snapshot PATH] [--bundle-id ID] [--platform PLATFORM] [--kind bug|suggestion] [--output-dir DIR]
+  xcfb prepare --title TEXT --description TEXT [--snapshot PATH] [--bundle-id ID] [--platform PLATFORM] [--kind bug|suggestion] [--output-dir DIR]
 
 Outputs:
   feedback-submission.json
@@ -210,24 +210,24 @@ Options:
   --output-dir DIR      Where to write the JSON and Markdown files.
 
 Agent pattern:
-  relato prepare \
+  xcfb prepare \
     --title "Foundation Models framework: add first-class video input support" \
     --description "$REPORT_BODY" \
     --snapshot ./evidence.md \
     --kind suggestion \
-    --output-dir /tmp/relato-report
+    --output-dir /tmp/xcfb-report
 
-  sed -n '1,220p' /tmp/relato-report/feedback-submission.md
-  relato submit --payload /tmp/relato-report/feedback-submission.json --dry-run
+  sed -n '1,220p' /tmp/xcfb-report/feedback-submission.md
+  xcfb submit --payload /tmp/xcfb-report/feedback-submission.json --dry-run
 ```
 
-### `relato help submit`
+### `xcfb help submit`
 
 ```sh
-relato submit: open/fill Feedback Assistant and optionally click native Submit
+xcfb submit: open/fill Feedback Assistant and optionally click native Submit
 
 Usage:
-  relato submit [--payload PATH] [--select-popups] [--wait-seconds N] [--verify-wait-seconds N] [--db PATH] [--confirm] [--verify-store] [--dry-run]
+  xcfb submit [--payload PATH] [--select-popups] [--wait-seconds N] [--verify-wait-seconds N] [--db PATH] [--confirm] [--verify-store] [--dry-run]
 
 Default behavior:
   Without `--confirm`, this fills the native form from the JSON payload, hides
@@ -250,7 +250,7 @@ Native form reality:
   Apple can add topic-specific required fields, popups, diagnostics, or log
   gathering. Agents should inspect the native app before `--confirm`; the
   local store check is useful evidence but not a server-side receipt.
-  RelatoKit uses an Objective-C Accessibility engine for native UI automation.
+  xcfb uses an Objective-C Accessibility engine for native UI automation.
   Text fields are set through passive AX value writes. With `--select-popups`,
   native platform, area, and type menus are selected through AX actions.
   Snapshot attachments are staged into the local Feedback Assistant draft folder after the native draft
@@ -258,21 +258,21 @@ Native form reality:
   Feedback Assistant and fails closed if the requested native option is absent.
 
 Agent pattern:
-  relato submit --payload feedback-submission.json --select-popups --dry-run
-  relato submit --payload feedback-submission.json --select-popups
+  xcfb submit --payload feedback-submission.json --select-popups --dry-run
+  xcfb submit --payload feedback-submission.json --select-popups
   # inspect native UI and satisfy any remaining Apple-only fields
-  relato submit --payload feedback-submission.json --select-popups --confirm --verify-store
-  relato store list --limit 10
-  relato store uploads --limit 10
+  xcfb submit --payload feedback-submission.json --select-popups --confirm --verify-store
+  xcfb store list --limit 10
+  xcfb store uploads --limit 10
 ```
 
-### `relato help fill`
+### `xcfb help fill`
 
 ```sh
-relato fill: fill the currently open Feedback Assistant draft
+xcfb fill: fill the currently open Feedback Assistant draft
 
 Usage:
-  relato fill [--payload PATH] [--select-popups]
+  xcfb fill [--payload PATH] [--select-popups]
 
 Notes:
   This does not open a new route and does not submit. It is useful when an
@@ -283,30 +283,30 @@ Notes:
   popups. Feedback Assistant is briefly activated for menu selection, then hidden.
 ```
 
-### `relato help store`
+### `xcfb help store`
 
 ```sh
-relato store: inspect the local Feedback Assistant store
+xcfb store: inspect the local Feedback Assistant store
 
 Usage:
-  relato store summary [--db PATH]
-  relato store list [--limit N] [--db PATH]
-  relato store uploads [--limit N] [--db PATH]
+  xcfb store summary [--db PATH]
+  xcfb store list [--limit N] [--db PATH]
+  xcfb store uploads [--limit N] [--db PATH]
 
 Agent pattern:
-  relato store summary
-  relato store list --limit 10
-  relato store uploads --limit 10
+  xcfb store summary
+  xcfb store list --limit 10
+  xcfb store uploads --limit 10
 
 Notes:
   Store reads are local evidence only. They can show drafts, recent items,
   and upload tasks, but they are not Apple server receipts.
 ```
 
-### `relato help web`
+### `xcfb help web`
 
 ```sh
-relato web: experimental Feedback Assistant web access
+xcfb web: experimental Feedback Assistant web access
 
 Status:
   EXPERIMENTAL / UNOFFICIAL
@@ -316,40 +316,40 @@ separate from the public App Store Connect API and from ASC's private Iris API.
 Endpoints and response schemas can change without notice.
 
 Authentication:
-  relato web auth login --apple-id EMAIL [--two-factor-code-command COMMAND]
+  xcfb web auth login --apple-id EMAIL [--two-factor-code-command COMMAND]
     Performs Apple Account SRP authentication directly from Swift. The password
     is read from a secure terminal prompt by default and is never stored.
     Trusted-device and trusted-phone two-factor challenges are supported.
-    RelatoKit stores only the resulting cookies and a one-way account hash.
+    xcfb stores only the resulting cookies and a one-way account hash.
 
-  relato web auth status
+  xcfb web auth status
     Validates the cached session against Feedback Assistant.
 
-  relato web auth logout
+  xcfb web auth logout
     Deletes the local session from the selected backend. It does not revoke
     Apple sessions.
 
 Login options and environment:
   --apple-id EMAIL
-    Apple Account email. Defaults to RELATO_WEB_APPLE_ID.
+    Apple Account email. Defaults to XCFB_WEB_APPLE_ID.
 
   --two-factor-code-command COMMAND
     Runs COMMAND for each requested verification code and reads the code from
-    stdout. Defaults to RELATO_WEB_2FA_CODE_COMMAND. Without a command, an
+    stdout. Defaults to XCFB_WEB_2FA_CODE_COMMAND. Without a command, an
     interactive terminal prompt is used.
 
-  RELATO_WEB_PASSWORD
+  XCFB_WEB_PASSWORD
     Supplies the password non-interactively. A secure terminal prompt is safer
     for human use because environment variables may be exposed to child
     processes or shell tooling.
 
-  RELATO_WEB_SESSION_BACKEND
+  XCFB_WEB_SESSION_BACKEND
     Selects file or keychain session storage. The default is file, which avoids
     recurring Keychain approval prompts for locally rebuilt unsigned binaries.
 
-  RELATO_WEB_SESSION_DIR
-    Overrides the file session directory. The default is ~/.relato/web.
-    RelatoKit enforces directory mode 0700 and session file mode 0600.
+  XCFB_WEB_SESSION_DIR
+    Overrides the file session directory. The default is ~/.xcfb/web.
+    xcfb enforces directory mode 0700 and session file mode 0600.
 
 Headless boundary:
   Password-based Apple Accounts, including trusted-device and trusted-phone 2FA,
@@ -357,30 +357,30 @@ Headless boundary:
   accounts and Apple Account actions that require a browser are not supported.
 
 Inspection commands:
-  relato web inbox list [--locale LOCALE] [--team-id ID] [--compact]
-  relato web feedback view --id ID [--locale LOCALE] [--compact]
+  xcfb web inbox list [--locale LOCALE] [--team-id ID] [--compact]
+  xcfb web feedback view --id ID [--locale LOCALE] [--compact]
     Reads Apple's server-backed feedback detail envelope, including the
     submitted feedback ID and originating form-response ID.
 
-  relato web feedback status --id ID [--locale LOCALE] [--compact]
+  xcfb web feedback status --id ID [--locale LOCALE] [--compact]
     Reads Apple's current status rows for a submitted feedback report.
 
-  relato web forms list [--locale LOCALE] [--team-id ID] [--compact]
-  relato web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]
-  relato web forms options --id ID [--tat TAT] [--locale LOCALE] [--team-id ID] [--compact]
+  xcfb web forms list [--locale LOCALE] [--team-id ID] [--compact]
+  xcfb web forms view --id ID [--locale LOCALE] [--team-id ID] [--compact]
+  xcfb web forms options --id ID [--tat TAT] [--locale LOCALE] [--team-id ID] [--compact]
     Emits normalized question metadata and label/value pairs. Use --tat to
     inspect one semantic field, such as :platform or :area.
 
 Draft commands:
-  relato web drafts create --form-id ID [--locale LOCALE] [--team-id ID] [--compact]
+  xcfb web drafts create --form-id ID [--locale LOCALE] [--team-id ID] [--compact]
     Creates a server-backed draft for a form returned by `web forms list`.
     The Apple response, including the new form response ID, is emitted as JSON.
 
-  relato web drafts view --id ID [--locale LOCALE] [--compact]
+  xcfb web drafts view --id ID [--locale LOCALE] [--compact]
     Reads a server-backed draft, including its form ID, saved answers, and
     attachment records.
 
-  relato web drafts update --id ID [--payload PATH] [field options] [--answer TAT=VALUE]... [--locale LOCALE] [--compact]
+  xcfb web drafts update --id ID [--payload PATH] [field options] [--answer TAT=VALUE]... [--locale LOCALE] [--compact]
     Fetches the current draft and form schema, preserves untouched answers,
     resolves choice labels to Apple's values, validates text limits, and saves
     the complete answer set.
@@ -396,25 +396,25 @@ Draft commands:
       --foundation-models-mode feedback|samples|APPLE_VALUE
 
     --payload imports title, description, platform, category area, and kind
-    from a `relato prepare` JSON payload. Explicit named options override it.
+    from a `xcfb prepare` JSON payload. Explicit named options override it.
     Repeat --answer TAT=VALUE for conditional or form-specific questions.
     Repeating the same TAT supplies multiple checkbox values.
 
-  relato web drafts attach --id ID [--file PATH]... [--payload PATH] [--locale LOCALE] [--compact]
+  xcfb web drafts attach --id ID [--file PATH]... [--payload PATH] [--locale LOCALE] [--compact]
     Uploads one or more local files through Apple's file-promise sequence:
     create, mark uploading, obtain a presigned object URL, upload raw bytes,
     mark uploaded, and verify the persisted file promise from the draft.
 
     Repeat --file to attach multiple files. --payload attaches the snapshot
-    path from a `relato prepare` JSON payload. Duplicate paths are uploaded once.
+    path from a `xcfb prepare` JSON payload. Duplicate paths are uploaded once.
     The command emits verified attachment receipts and never prints presigned URLs.
 
-  relato web drafts validate --id ID [--locale LOCALE] [--compact]
+  xcfb web drafts validate --id ID [--locale LOCALE] [--compact]
     Fetches the draft and its current form schema, evaluates Apple's conditional
     required fields, treats an uploaded file promise as satisfying a visible
     Required File Zone, and emits a machine-readable readiness result.
 
-  relato web drafts submit --id ID --confirm [--locale LOCALE] [--compact]
+  xcfb web drafts submit --id ID --confirm [--locale LOCALE] [--compact]
     Saves the complete answer set using Apple's submission representation,
     submits the server-backed draft, and verifies the returned feedback ID
     through Apple's feedback-detail endpoint.
@@ -435,12 +435,12 @@ Boundaries:
 
 ## Scripting Tips
 
-- Use `relato submit --dry-run` before `--confirm` to preview the native handoff plan.
+- Use `xcfb submit --dry-run` before `--confirm` to preview the native handoff plan.
 - Treat the JSON payload as the source of truth; regenerate it instead of hand-editing unless you know the schema.
 - Use the Markdown payload to review the report body and stage supporting evidence.
-- Use `relato open ROUTE --print-only` when you only need the Feedback Assistant URL.
-- Use `relato store summary` and `relato store list` for local verification after native submission.
+- Use `xcfb open ROUTE --print-only` when you only need the Feedback Assistant URL.
+- Use `xcfb store summary` and `xcfb store list` for local verification after native submission.
 - Treat local store verification as local evidence, not an Apple server receipt.
 - `--select-popups` briefly activates Feedback Assistant to select native platform, area, and type menus.
-- Use `relato web auth status` before experimental web requests.
-- Treat `relato web` response schemas as unstable and preserve raw JSON when debugging.
+- Use `xcfb web auth status` before experimental web requests.
+- Treat `xcfb web` response schemas as unstable and preserve raw JSON when debugging.

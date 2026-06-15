@@ -1,7 +1,7 @@
 import Foundation
 
 enum FeedbackWebHTTP {
-    static let userAgent = "RelatoKit/experimental-web"
+    static let userAgent = "xcfb/experimental-web"
 
     static func makeSession(
         configuration: URLSessionConfiguration

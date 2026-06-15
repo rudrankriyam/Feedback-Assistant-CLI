@@ -79,10 +79,10 @@ public actor FeedbackWebAuthenticator {
     ) async throws -> FeedbackWebSession {
         let appleID = appleID.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !appleID.isEmpty else {
-            throw RelatoError.invalidArgument("Apple Account email is required")
+            throw XCFBError.invalidArgument("Apple Account email is required")
         }
         guard !password.isEmpty else {
-            throw RelatoError.invalidArgument("Apple Account password is required")
+            throw XCFBError.invalidArgument("Apple Account password is required")
         }
         let accountIdentifierHash = FeedbackWebSession.identifierHash(for: appleID)
         session = FeedbackWebSession(
@@ -569,7 +569,7 @@ public actor FeedbackWebAuthenticator {
         do {
             body = try JSONEncoder().encode(payload)
         } catch {
-            throw RelatoError.web("could not encode Apple \(stage) request")
+            throw XCFBError.web("could not encode Apple \(stage) request")
         }
         var headers = headers
         headers["Content-Type"] = "application/json"

@@ -24,7 +24,7 @@ public enum FeedbackWebClientError: Error, CustomStringConvertible, Equatable {
     public var description: String {
         switch self {
         case .authenticationRequired:
-            return "web authentication is required; run `relato web auth login`"
+            return "web authentication is required; run `xcfb web auth login`"
         case .invalidResponse:
             return "Apple returned an invalid web response"
         case .requestFailed(let status, let path):
@@ -166,8 +166,8 @@ public actor FeedbackWebClient {
     ) async throws -> FeedbackWebSubmissionReceipt {
         let (draft, form) = try await submissionContext(id: id, locale: locale)
         if form.formRole?.caseInsensitiveCompare("Survey") == .orderedSame {
-            throw RelatoError.invalidArgument(
-                "Survey draft submission is not supported by `relato web drafts submit`"
+            throw XCFBError.invalidArgument(
+                "Survey draft submission is not supported by `xcfb web drafts submit`"
             )
         }
         let preflight = try FeedbackWebSubmissionValidator.preflight(
@@ -176,7 +176,7 @@ public actor FeedbackWebClient {
         )
         guard preflight.ready else {
             let missing = preflight.missingRequiredFields.map(\.tat).joined(separator: ", ")
-            throw RelatoError.invalidArgument(
+            throw XCFBError.invalidArgument(
                 "Draft \(draft.id) is not ready to submit. Missing required fields: \(missing)"
             )
         }
@@ -216,7 +216,7 @@ public actor FeedbackWebClient {
             name: "submission"
         )
         guard let feedbackID = response.items.feedbackID else {
-            throw RelatoError.web("Apple did not return a feedback ID after submission")
+            throw XCFBError.web("Apple did not return a feedback ID after submission")
         }
 
         try await verifySubmittedFeedback(
@@ -260,14 +260,14 @@ public actor FeedbackWebClient {
             forKeys: [.fileSizeKey, .isRegularFileKey]
         )
         guard resourceValues.isRegularFile == true else {
-            throw RelatoError.missingFile(fileURL.path)
+            throw XCFBError.missingFile(fileURL.path)
         }
         guard let fileSize = resourceValues.fileSize, fileSize > 0 else {
-            throw RelatoError.invalidArgument("Attachment must be a non-empty regular file")
+            throw XCFBError.invalidArgument("Attachment must be a non-empty regular file")
         }
         let fileName = fileURL.lastPathComponent
         guard !fileName.isEmpty else {
-            throw RelatoError.invalidArgument("Attachment filename cannot be empty")
+            throw XCFBError.invalidArgument("Attachment filename cannot be empty")
         }
 
         var promiseUUID: String?
@@ -290,7 +290,7 @@ public actor FeedbackWebClient {
                 name: "file promise"
             )
             guard !created.uuid.isEmpty else {
-                throw RelatoError.web("Apple returned an empty file promise UUID")
+                throw XCFBError.web("Apple returned an empty file promise UUID")
             }
             promiseUUID = created.uuid
 
@@ -335,7 +335,7 @@ public actor FeedbackWebClient {
         }
 
         guard let uuid = promiseUUID else {
-            throw RelatoError.web("Apple did not create a file promise")
+            throw XCFBError.web("Apple did not create a file promise")
         }
         let promise = try await verifyAttachment(
             draftID: draftID,
@@ -368,7 +368,7 @@ public actor FeedbackWebClient {
             !path.contains("://"),
             let url = URL(string: path, relativeTo: FeedbackWebAPI.serviceBase)?.absoluteURL
         else {
-            throw RelatoError.web("invalid Appleseed API path")
+            throw XCFBError.web("invalid Appleseed API path")
         }
 
         var request = URLRequest(url: url)
@@ -493,7 +493,7 @@ public actor FeedbackWebClient {
                 return promise
             }
         }
-        throw RelatoError.web(
+        throw XCFBError.web(
             "attachment upload completed, but Apple did not return an uploaded file promise"
         )
     }
@@ -551,7 +551,7 @@ public actor FeedbackWebClient {
                 continue
             }
         }
-        throw RelatoError.web(
+        throw XCFBError.web(
             "Apple returned FB\(feedbackID), but server receipt verification did not confirm draft \(draftID)"
         )
     }
@@ -565,7 +565,7 @@ public actor FeedbackWebClient {
             components.password == nil,
             let url = components.url
         else {
-            throw RelatoError.web("Apple returned an invalid attachment upload URL")
+            throw XCFBError.web("Apple returned an invalid attachment upload URL")
         }
         return url
     }
@@ -578,7 +578,7 @@ public actor FeedbackWebClient {
         do {
             return try JSONDecoder().decode(type, from: data)
         } catch {
-            throw RelatoError.web("Apple returned a malformed \(name) response")
+            throw XCFBError.web("Apple returned a malformed \(name) response")
         }
     }
 
@@ -595,7 +595,7 @@ public actor FeedbackWebClient {
         var components = URLComponents()
         components.queryItems = [URLQueryItem(name: queryName, value: value)]
         guard let query = components.percentEncodedQuery else {
-            throw RelatoError.web("could not encode \(queryName)")
+            throw XCFBError.web("could not encode \(queryName)")
         }
         return "\(basePath)?\(query)"
     }
@@ -603,12 +603,12 @@ public actor FeedbackWebClient {
     private func pathSegment(_ value: String, name: String) throws -> String {
         let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else {
-            throw RelatoError.invalidArgument("\(name) is required")
+            throw XCFBError.invalidArgument("\(name) is required")
         }
         var allowed = CharacterSet.alphanumerics
         allowed.insert(charactersIn: "-._~")
         guard let encoded = value.addingPercentEncoding(withAllowedCharacters: allowed) else {
-            throw RelatoError.web("could not encode \(name)")
+            throw XCFBError.web("could not encode \(name)")
         }
         return encoded
     }
@@ -616,7 +616,7 @@ public actor FeedbackWebClient {
     private func numericID(_ value: String, name: String) throws -> Int {
         let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let id = Int(value), id > 0 else {
-            throw RelatoError.invalidArgument("\(name) must be a positive integer")
+            throw XCFBError.invalidArgument("\(name) must be a positive integer")
         }
         return id
     }
@@ -629,7 +629,7 @@ public actor FeedbackWebClient {
                 CharacterSet.letters.contains($0) || $0 == "-"
             })
         else {
-            throw RelatoError.invalidArgument("Invalid locale: \(locale)")
+            throw XCFBError.invalidArgument("Invalid locale: \(locale)")
         }
         return locale
     }

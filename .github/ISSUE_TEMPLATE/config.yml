@@ -1,5 +1,5 @@
 blank_issues_enabled: true
 contact_links:
   - name: Support checklist
-    url: https://github.com/rryam/RelatoKit/blob/main/SUPPORT.md
+    url: https://github.com/rryam/xcfb/blob/main/SUPPORT.md
     about: Check what to include before filing an issue.
