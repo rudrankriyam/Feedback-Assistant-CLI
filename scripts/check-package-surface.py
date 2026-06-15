@@ -22,8 +22,8 @@ def main() -> int:
     package = json.loads(result.stdout)
     products = package.get("products", [])
 
-    if package.get("name") != "xcfb":
-        print("Package name must be xcfb.")
+    if package.get("name") != "FeedbackAssistantCLI":
+        print("Package name must be FeedbackAssistantCLI.")
         return 1
     if len(products) != 1:
         print("xcfb must expose exactly one Swift package product.")

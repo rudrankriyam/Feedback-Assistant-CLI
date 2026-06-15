@@ -3,12 +3,12 @@
 import PackageDescription
 
 let package = Package(
-    name: "xcfb",
+    name: "FeedbackAssistantCLI",
     platforms: [
         .macOS(.v14)
     ],
     products: [
-        .executable(name: "xcfb", targets: ["xcfb"])
+        .executable(name: "xcfb", targets: ["XCFBCLI"])
     ],
     dependencies: [
         .package(url: "https://github.com/attaswift/BigInt.git", from: "5.7.0")
@@ -27,7 +27,7 @@ let package = Package(
         ),
         .target(name: "XCFBNativeAutomation"),
         .executableTarget(
-            name: "xcfb",
+            name: "XCFBCLI",
             dependencies: ["XCFBCore"]
         ),
         .testTarget(
