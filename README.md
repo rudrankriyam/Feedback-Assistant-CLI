@@ -1,6 +1,6 @@
 # xcfb
 
-[![CI](https://github.com/rryam/xcfb/actions/workflows/ci.yml/badge.svg)](https://github.com/rryam/xcfb/actions/workflows/ci.yml)
+[![CI](https://github.com/rudrankriyam/xcfb/actions/workflows/ci.yml/badge.svg)](https://github.com/rudrankriyam/xcfb/actions/workflows/ci.yml)
 [![Swift](https://img.shields.io/badge/Swift-6.0+-fa7343?style=flat&logo=swift&logoColor=white)](https://swift.org)
 [![Platform](https://img.shields.io/badge/macOS-14.0+-000000?style=flat&logo=apple&logoColor=white)](https://developer.apple.com/macos/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -40,7 +40,7 @@ xcfb submit --payload feedback-submission.json --select-popups
 Build from source:
 
 ```sh
-git clone https://github.com/rryam/xcfb.git
+git clone https://github.com/rudrankriyam/xcfb.git
 cd xcfb
 swift build -c release
 .build/release/xcfb --help
