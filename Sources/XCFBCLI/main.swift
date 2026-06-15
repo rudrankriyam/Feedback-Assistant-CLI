@@ -3,7 +3,7 @@ import Foundation
 import XCFBCore
 
 enum XCFBCLI {
-    static let version = "0.3.0"
+    static let version = "0.3.1"
     static let webAppleIDEnvironment = "XCFB_WEB_APPLE_ID"
     static let webPasswordEnvironment = "XCFB_WEB_PASSWORD"
     static let webTwoFactorCommandEnvironment = "XCFB_WEB_2FA_CODE_COMMAND"
