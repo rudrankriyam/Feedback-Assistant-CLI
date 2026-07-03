@@ -9,6 +9,15 @@
 > `xcfb` is a community-defined name and an unofficial tool. It is not an
 > Apple command or product, and it is not affiliated with or endorsed by Apple.
 
+> [!WARNING]
+> **Apple ID risk with the `xcfb web` commands.** The web workflow reimplements
+> Apple's sign-in flow against undocumented, unsupported endpoints. Automated
+> sign-in can trigger rate limiting, security challenges, or a temporary
+> lockout on the Apple ID you use, and the endpoints may change or stop working
+> without notice. Prefer the native (Accessibility) path, which drives the
+> official Feedback Assistant app, and where possible use a dedicated test
+> Apple ID rather than your primary account for the web commands.
+
 `xcfb` is an agent-first command-line toolkit for Apple Feedback Assistant
 workflows on macOS. It prepares, files, and verifies reports; inspects the local
 Feedback Assistant store; drives Apple's native app through Accessibility; and
