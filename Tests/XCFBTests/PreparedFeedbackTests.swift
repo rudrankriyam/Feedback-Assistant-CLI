@@ -85,3 +85,22 @@ import Testing
         try FeedbackRoutes.url(for: "feedback")
     }
 }
+
+@Test func feedbackKindLabelsAgreeAcrossNativeAndWebPaths() throws {
+    for kind in FeedbackKind.allCases {
+        // The web draft flow parses user input and renders the shared label;
+        // the native flow reads `nativeLabel` directly. Both must agree.
+        let parsed = try #require(FeedbackKind(userInput: kind.rawValue))
+        #expect(parsed == kind)
+        #expect(parsed.nativeLabel == kind.nativeLabel)
+
+        // The full Feedback Assistant label round-trips, case-insensitively.
+        #expect(FeedbackKind(userInput: kind.nativeLabel) == kind)
+        #expect(FeedbackKind(userInput: kind.nativeLabel.uppercased()) == kind)
+    }
+
+    #expect(FeedbackKind.bug.nativeLabel == "Incorrect/Unexpected Behavior")
+    #expect(FeedbackKind.suggestion.nativeLabel == "Suggestion")
+    #expect(FeedbackKind(userInput: "incorrect") == .bug)
+    #expect(FeedbackKind(userInput: "enhancement") == nil)
+}

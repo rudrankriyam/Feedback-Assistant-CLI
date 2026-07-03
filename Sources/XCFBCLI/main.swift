@@ -472,16 +472,12 @@ enum XCFBCLI {
     }
 
     static func webFeedbackType(_ value: String) throws -> String {
-        switch value.lowercased() {
-        case "bug", "incorrect", "incorrect/unexpected behavior":
-            return "Incorrect/Unexpected Behavior"
-        case "suggestion":
-            return "Suggestion"
-        default:
+        guard let kind = FeedbackKind(userInput: value) else {
             throw XCFBError.invalidArgument(
                 "Invalid value for --kind: \(value). Expected bug or suggestion."
             )
         }
+        return kind.nativeLabel
     }
 
     static func runStore(_ rawArguments: [String]) throws {

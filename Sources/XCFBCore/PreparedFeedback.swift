@@ -1,15 +1,34 @@
 import Foundation
 
-public enum FeedbackKind: String, Codable {
+public enum FeedbackKind: String, Codable, CaseIterable {
     case bug
     case suggestion
 
+    /// The Feedback Assistant label for this kind. Single source of truth
+    /// shared by the native (Accessibility) flow and the web draft flow.
     public var nativeLabel: String {
         switch self {
         case .bug:
             return "Incorrect/Unexpected Behavior"
         case .suggestion:
             return "Suggestion"
+        }
+    }
+
+    /// Lenient parser for user-supplied kind values, accepting the raw kind
+    /// name, common shorthands, and the full Feedback Assistant label
+    /// (case-insensitively).
+    public init?(userInput: String) {
+        switch userInput.lowercased() {
+        case FeedbackKind.bug.rawValue,
+            "incorrect",
+            FeedbackKind.bug.nativeLabel.lowercased():
+            self = .bug
+        case FeedbackKind.suggestion.rawValue,
+            FeedbackKind.suggestion.nativeLabel.lowercased():
+            self = .suggestion
+        default:
+            return nil
         }
     }
 }
